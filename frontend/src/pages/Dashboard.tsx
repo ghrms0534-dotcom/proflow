@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -31,21 +31,9 @@ import {
   TestTube2,
   UserCircle,
 } from 'lucide-react';
-import api from '../api';
+import { DashboardService } from '../services/dashboardService';
 import { useAppStore } from '../store';
-
-interface Project {
-  id: number;
-  name: string;
-}
-
-interface DashboardData {
-  overall_progress: number;
-  total_tasks: number;
-  completed_tasks: number;
-  stages: { name: string; progress: number; completed: number; total: number }[];
-  project_info: { name: string; customer: string; pm: string; period: string; base_date: string };
-}
+import type { DashboardData, DashboardLoadState, Project } from '../types/dashboard';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -65,23 +53,21 @@ const sidebarMenu: MenuGroup[] = [
   { title: '시스템 관리', icon: Settings, children: ['계정 관리', 'AI 설정', '프로젝트 구성'] },
 ];
 
-const taskRows = [
-  { no: 1, name: '회원 API 명세서 작성', stage: '분석 · 설계', assignee: '김영희', due: '2025-05-26', status: '진행중', priority: '높음' },
-  { no: 2, name: '결제 기능 요구사항 검토', stage: '분석 · 설계', assignee: '이철수', due: '2025-05-27', status: '진행중', priority: '높음' },
-  { no: 3, name: '화면 설계 - 관리자 대시보드', stage: '분석 · 설계', assignee: '박민지', due: '2025-05-27', status: '완료', priority: '보통' },
-  { no: 4, name: '통합 테스트 케이스 등록', stage: '개발 · 테스트', assignee: '최지훈', due: '2025-05-30', status: '진행중', priority: '보통' },
-  { no: 5, name: '결함 #125 수정 및 검증', stage: '검증 · 산출', assignee: '최지훈', due: '2025-06-01', status: '진행중', priority: '높음' },
-  { no: 6, name: '산출물 목록 최종 검토', stage: '검증 · 산출', assignee: '김영희', due: '2025-06-02', status: '대기', priority: '낮음' },
-  { no: 7, name: '보안 취약점 점검 보고서', stage: '검증 · 산출', assignee: '이철수', due: '2025-06-03', status: '대기', priority: '낮음' },
-];
+const dashboardActivityIcons = {
+  flask: TestTube2,
+  clipboard: ClipboardCheck,
+  fileCode: FileCode2,
+  package: PackageCheck,
+  alert: AlertTriangle,
+};
 
-const activities = [
-  { icon: FlaskIcon, title: '요구사항 분석 완료', desc: 'AI가 요구사항 43건을 분석하고 누락/충돌을 검토했습니다.', time: '10:20', color: 'bg-emerald-500' },
-  { icon: ClipboardCheck, title: 'API 설계 검토 완료', desc: 'AI가 API 18개를 검토하고 개선 사항을 제안했습니다.', time: '09:45', color: 'bg-violet-600' },
-  { icon: FileCode2, title: '테스트 케이스 32건 생성', desc: 'AI가 요구사항 기반 테스트 케이스를 생성했습니다.', time: '09:10', color: 'bg-blue-600' },
-  { icon: PackageCheck, title: '결함 #125 원인 분석 완료', desc: 'AI가 결함의 원인과 조치 방안을 분석했습니다.', time: '08:50', color: 'bg-orange-500' },
-  { icon: AlertTriangle, title: 'WBS 초안 생성 완료', desc: 'AI가 요구사항 기반 WBS 초안을 생성했습니다.', time: '어제 18:30', color: 'bg-red-500' },
-];
+const dashboardRecommendationIcons = {
+  alert: AlertTriangle,
+  database: Database,
+  calendar: CalendarDays,
+  briefcase: BriefcaseBusiness,
+  shield: ShieldCheck,
+};
 
 const aiFeatures = [
   { icon: BookOpen, title: '요구사항 누락 분석', desc: '요구사항 문서 기반 핵심 기능과 의존성 분석', color: 'text-blue-600 bg-blue-50' },
@@ -89,14 +75,6 @@ const aiFeatures = [
   { icon: Database, title: 'API 설계 검토', desc: 'API 설계 문서의 누락/불일치 항목 검토', color: 'text-emerald-600 bg-emerald-50' },
   { icon: TestTube2, title: '테스트 케이스 생성', desc: '요구사항 기반 테스트 케이스 자동 생성', color: 'text-orange-600 bg-orange-50' },
   { icon: AlertTriangle, title: '결함 원인 분석', desc: '결함의 원인과 조치 방안 분석', color: 'text-red-600 bg-red-50' },
-];
-
-const aiResultCards = [
-  { icon: AlertTriangle, title: '요구사항 누락 분석', desc: '3개 요구사항이 설계에 반영되지 않았습니다.', color: 'bg-orange-500', action: '상세 보기' },
-  { icon: Database, title: 'API 설계 개선', desc: '응답 코드 표준화가 필요합니다.', color: 'bg-emerald-600', action: '상세 보기' },
-  { icon: CalendarDays, title: '테스트 케이스 추천', desc: '추가해야 할 테스트 케이스 14건을 제안합니다.', color: 'bg-violet-600', action: '적용하기' },
-  { icon: BriefcaseBusiness, title: '일정 지연 예측', desc: '3개 작업의 일정 지연 가능성이 높습니다.', color: 'bg-blue-500', action: '상세 보기' },
-  { icon: ShieldCheck, title: '결함 원인 분석', desc: '유사 결함 5건을 기반으로 원인을 분석했습니다.', color: 'bg-red-500', action: '상세 보기' },
 ];
 
 const requirementRows = [
@@ -879,6 +857,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const { currentProjectId, setProjectId, user } = useAppStore();
   const [projects, setProjects] = useState<Project[]>([]);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardLoadState, setDashboardLoadState] = useState<DashboardLoadState>('loading');
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState('통합 대시보드');
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     '1. 분석 · 설계': true,
@@ -888,15 +868,24 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   });
 
   useEffect(() => {
-    api.get<Project[]>('/projects').then(({ data }) => {
+    DashboardService.getProjects().then(({ data, fallback, error }) => {
       setProjects(data);
+      if (fallback) {
+        setDashboardLoadState('fallback');
+        setDashboardError(error ?? null);
+      }
       if (!currentProjectId && data[0]) setProjectId(String(data[0].id));
     });
   }, [currentProjectId, setProjectId]);
 
   useEffect(() => {
     if (!currentProjectId) return;
-    api.get<DashboardData>(`/projects/${currentProjectId}/dashboard`).then(({ data }) => setDashboardData(data));
+    setDashboardLoadState('loading');
+    DashboardService.getDashboard(currentProjectId).then(({ data, fallback, error }) => {
+      setDashboardData(data);
+      setDashboardLoadState(fallback ? 'fallback' : 'ready');
+      setDashboardError(error ?? null);
+    });
   }, [currentProjectId]);
 
   return (
@@ -957,7 +946,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
       <section className="flex min-w-0 flex-1 flex-col">
         <Header projects={projects} currentProjectId={currentProjectId} setProjectId={setProjectId} userName={user?.name ?? '홍길동'} userRole={user?.role ?? 'PMO / PM'} />
-        {activeMenu === '통합 대시보드' ? <DashboardHome data={dashboardData} /> : <WorkScreen title={activeMenu} />}
+        {activeMenu === '통합 대시보드' ? <DashboardHome data={dashboardData} loadState={dashboardLoadState} error={dashboardError} /> : <WorkScreen title={activeMenu} />}
       </section>
     </div>
   );
@@ -1004,15 +993,17 @@ function Header({ projects, currentProjectId, setProjectId, userName, userRole }
   );
 }
 
-function DashboardHome({ data }: { data: DashboardData | null }) {
+function DashboardHome({ data, loadState, error }: { data: DashboardData | null; loadState: DashboardLoadState; error: string | null }) {
   const [detail, setDetail] = useState<'overall' | 'stages' | 'tasks' | 'activities' | 'recommendations' | null>(null);
+  const [recommendationIndex, setRecommendationIndex] = useState(0);
+  const [recommendationListMode, setRecommendationListMode] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  if (!data) return <main className="flex flex-1 items-center justify-center text-sm text-slate-500">Loading...</main>;
+  if (!data) return <main className="flex flex-1 items-center justify-center text-sm text-slate-500">{loadState === 'loading' ? 'Loading...' : '대시보드 mock 데이터를 준비 중입니다.'}</main>;
 
   const stageStats = [
-    { title: '1. 분석 · 설계', progress: data.stages[0]?.progress ?? 72, completed: 28, progressCount: 7, waiting: 4, color: 'bg-[#0b66e4]', text: 'text-[#0b66e4]' },
-    { title: '2. 개발 · 테스트', progress: data.stages[1]?.progress ?? 41, completed: 32, progressCount: 14, waiting: 32, color: 'bg-emerald-500', text: 'text-emerald-600' },
-    { title: '3. 검증 · 산출', progress: data.stages[2]?.progress ?? 12, completed: 6, progressCount: 6, waiting: 39, color: 'bg-orange-500', text: 'text-orange-600' },
+    { title: `1. ${data.stages[0]?.name ?? '분석 · 설계'}`, progress: data.stages[0]?.progress ?? 72, completed: data.stages[0]?.completed ?? 28, progressCount: data.stages[0]?.inProgress ?? 7, waiting: data.stages[0]?.waiting ?? 4, color: 'bg-[#0b66e4]', text: 'text-[#0b66e4]' },
+    { title: `2. ${data.stages[1]?.name ?? '개발 · 테스트'}`, progress: data.stages[1]?.progress ?? 41, completed: data.stages[1]?.completed ?? 32, progressCount: data.stages[1]?.inProgress ?? 14, waiting: data.stages[1]?.waiting ?? 32, color: 'bg-emerald-500', text: 'text-emerald-600' },
+    { title: `3. ${data.stages[2]?.name ?? '검증 · 산출'}`, progress: data.stages[2]?.progress ?? 12, completed: data.stages[2]?.completed ?? 6, progressCount: data.stages[2]?.inProgress ?? 6, waiting: data.stages[2]?.waiting ?? 39, color: 'bg-orange-500', text: 'text-orange-600' },
   ];
 
   return (
@@ -1027,17 +1018,22 @@ function DashboardHome({ data }: { data: DashboardData | null }) {
             <Sparkles size={16} /> AI 열기
           </button>
         </div>
+        {error && (
+          <div className="mb-2.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-medium text-orange-700">
+            {error}. mock 데이터로 대시보드를 표시합니다.
+          </div>
+        )}
 
         <div className="grid grid-cols-12 gap-3.5">
           <Card onClick={() => setDetail('overall')} className="col-span-12 h-[172px] p-2.5 lg:col-span-4">
             <h2 className="text-[12px] font-semibold">전체 진행률</h2>
             <div className="mt-3 flex items-center gap-4">
-              <ProgressRing value={data.overall_progress} />
+              <ProgressRing value={data.summary.progress} />
               <div className="min-w-[112px] flex-1 space-y-2 text-sm">
-                <InfoRow label="전체 작업" value={`${data.total_tasks}건`} />
-                <InfoRow label="완료" value={`${data.completed_tasks}건`} />
-                <InfoRow label="진행 중" value="48건" />
-                <InfoRow label="대기" value="8건" />
+                <InfoRow label="전체 작업" value={`${data.summary.totalTasks}건`} />
+                <InfoRow label="완료" value={`${data.summary.completedTasks}건`} />
+                <InfoRow label="진행 중" value={`${data.summary.inProgressTasks}건`} />
+                <InfoRow label="대기" value={`${data.summary.waitingTasks}건`} />
               </div>
             </div>
           </Card>
@@ -1052,11 +1048,11 @@ function DashboardHome({ data }: { data: DashboardData | null }) {
           <Card className="col-span-12 h-[172px] p-2.5 lg:col-span-3">
             <h2 className="text-[12px] font-semibold">프로젝트 정보</h2>
             <div className="mt-4 space-y-2.5 text-sm">
-              <InfoRow label="프로젝트명" value={data.project_info.name} />
-              <InfoRow label="고객사" value={data.project_info.customer} />
-              <InfoRow label="PM" value={data.project_info.pm} />
-              <InfoRow label="기간" value={data.project_info.period} />
-              <InfoRow label="기준일" value={data.project_info.base_date} />
+              <InfoRow label="프로젝트명" value={data.projectInfo.name} />
+              <InfoRow label="고객사" value={data.projectInfo.customer} />
+              <InfoRow label="PM" value={data.projectInfo.pm} />
+              <InfoRow label="기간" value={data.projectInfo.period} />
+              <InfoRow label="기준일" value={data.projectInfo.baseDate} />
             </div>
           </Card>
 
@@ -1078,7 +1074,7 @@ function DashboardHome({ data }: { data: DashboardData | null }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {taskRows.map((task) => (
+                {data.tasks.map((task) => (
                   <tr key={task.no} className="transition-colors duration-150 hover:bg-blue-50/40">
                     <td className="w-10 px-2.5 py-1.5 font-medium">{task.no}</td>
                     <td className="px-2.5 py-1.5 font-medium text-[#0b1f44]">{task.name}</td>
@@ -1097,8 +1093,8 @@ function DashboardHome({ data }: { data: DashboardData | null }) {
           <Card onClick={() => setDetail('activities')} className="col-span-12 lg:col-span-5">
             <SectionHeader title="최근 활동" />
             <div className="divide-y divide-slate-100 px-3">
-              {activities.slice(0, 3).map((activity) => {
-                const Icon = activity.icon;
+              {data.recentActivities.slice(0, 3).map((activity) => {
+                const Icon = dashboardActivityIcons[activity.icon];
                 return (
                   <div key={activity.title} className="flex items-center gap-3 py-2.5">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activity.color} text-white`}><Icon size={17} /></div>
@@ -1114,19 +1110,19 @@ function DashboardHome({ data }: { data: DashboardData | null }) {
             <div className="px-3 pb-3 text-right text-sm font-medium text-emerald-700">전체보기 &gt;</div>
           </Card>
 
-          <Card onClick={() => setDetail('recommendations')} className="col-span-12 p-3">
+          <Card onClick={() => { setRecommendationIndex(0); setRecommendationListMode(true); setDetail('recommendations'); }} className="col-span-12 p-3">
             <h2 className="mb-2.5 text-sm font-semibold">AI 추천 결과</h2>
             <div className="grid gap-2.5 xl:grid-cols-5">
-              {aiResultCards.map((item, index) => {
-                const Icon = item.icon;
+              {data.aiRecommendations.map((item, index) => {
+                const Icon = dashboardRecommendationIcons[item.icon];
                 return (
-                  <div key={item.title} className={`group cursor-pointer rounded-lg border bg-white p-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] ${index === 0 ? 'border-orange-200 border-l-4 border-l-orange-500 bg-orange-50/30' : 'border-slate-200 border-l-4 border-l-slate-200 hover:border-l-orange-400'}`}>
+                  <div key={item.id} onClick={(event) => { event.stopPropagation(); setRecommendationIndex(index); setRecommendationListMode(false); setDetail('recommendations'); }} className={`group cursor-pointer rounded-lg border bg-white p-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] ${index === 0 ? 'border-orange-200 border-l-4 border-l-orange-500 bg-orange-50/30' : 'border-slate-200 border-l-4 border-l-slate-200 hover:border-l-orange-400'}`}>
                     <div className="flex items-start gap-2.5">
                       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.color} text-white`}><Icon size={16} /></div>
                       <div>
                         <div className="flex items-center gap-2 text-sm font-semibold text-[#0b1f44]">
                           {item.title}
-                          <PriorityLevelBadge value={index === 0 || index === 4 ? 'HIGH' : index === 3 ? 'MEDIUM' : 'LOW'} />
+                          <PriorityLevelBadge value={item.priority} />
                         </div>
                         <p className="mt-1 min-h-[34px] text-xs leading-5 text-[#64748B]">{item.desc}</p>
                       </div>
@@ -1136,18 +1132,18 @@ function DashboardHome({ data }: { data: DashboardData | null }) {
                 );
               })}
             </div>
-            <div className="pt-2.5 text-right text-sm font-medium text-emerald-700">전체 추천 보기 &gt;</div>
+            <button onClick={(event) => { event.stopPropagation(); setRecommendationIndex(0); setRecommendationListMode(true); setDetail('recommendations'); }} className="block w-full pt-2.5 text-right text-sm font-medium text-emerald-700">전체 추천 보기 &gt;</button>
           </Card>
         </div>
       </div>
 
       <AiPanel open={aiOpen} onToggle={() => setAiOpen((open) => !open)} />
-      {detail && <DashboardDetailDialog type={detail} data={data} stageStats={stageStats} onClose={() => setDetail(null)} />}
+      {detail && <DashboardDetailDialog type={detail} data={data} stageStats={stageStats} recommendationIndex={recommendationIndex} recommendationListMode={recommendationListMode} onRecommendationChange={setRecommendationIndex} onClose={() => setDetail(null)} />}
     </main>
   );
 }
 
-function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'overall' | 'stages' | 'tasks' | 'activities' | 'recommendations'; data: DashboardData; stageStats: { title: string; progress: number; completed: number; progressCount: number; waiting: number; color: string; text: string }[]; onClose: () => void }) {
+function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, recommendationListMode, onRecommendationChange, onClose }: { type: 'overall' | 'stages' | 'tasks' | 'activities' | 'recommendations'; data: DashboardData; stageStats: { title: string; progress: number; completed: number; progressCount: number; waiting: number; color: string; text: string }[]; recommendationIndex: number; recommendationListMode: boolean; onRecommendationChange: (index: number) => void; onClose: () => void }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -1156,16 +1152,17 @@ function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'ove
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const selectedRecommendation = data.aiRecommendations[recommendationIndex] ?? data.aiRecommendations[0];
   const meta = {
     overall: { title: '전체 진행률 상세', badge: 'WARN', agent: 'Project Risk Agent', analysis: '완료 작업은 안정적으로 누적되고 있지만 진행 중 작업 48건이 검증 단계 대기와 겹쳐 있습니다. 마감 전 병목은 결함 조치와 산출물 검수에서 먼저 발생할 가능성이 높습니다.' },
     stages: { title: '단계별 진행률 상세', badge: 'WARN', agent: 'Stage Agent', analysis: '분석·설계는 안정권이지만 개발·테스트와 검증·산출 사이 진행률 차이가 큽니다. 검증 대기 작업이 늘어나면 후반 일정 압박이 커집니다.' },
     tasks: { title: '주요 작업 현황 상세', badge: 'SAFE', agent: 'Task Agent', analysis: '높음 우선순위 작업은 대부분 담당자가 배정되어 있습니다. 다만 결함 조치와 보안 점검이 같은 검증 구간에 있어 담당자 부하 확인이 필요합니다.' },
     activities: { title: '최근 활동 상세', badge: 'SAFE', agent: 'Activity Agent', analysis: '최근 활동은 AI 분석, API 검토, 테스트 케이스 생성으로 이어져 흐름이 자연스럽습니다. 배포 전에는 WBS 초안과 결함 분석 결과를 작업 상태에 반영해야 합니다.' },
-    recommendations: { title: 'AI 추천 결과 상세', badge: 'CRITICAL', agent: 'Recommendation Agent', analysis: '요구사항 누락, 결함 원인, 일정 지연 추천이 서로 연결되어 있습니다. 누락 요구사항을 먼저 정리하면 테스트 케이스와 결함 재발 위험을 동시에 줄일 수 있습니다.' },
+    recommendations: { title: selectedRecommendation.title, badge: selectedRecommendation.priority === 'HIGH' ? 'CRITICAL' : selectedRecommendation.priority === 'MEDIUM' ? 'WARN' : 'SAFE', agent: 'Recommendation Agent', analysis: selectedRecommendation.analysisReason },
   }[type];
 
   const history = type === 'recommendations'
-    ? ['요구사항 누락 3건 감지', '유사 결함 5건 매칭', '일정 지연 가능 작업 3건 연결']
+    ? [selectedRecommendation.detailSummary, selectedRecommendation.rootCause, selectedRecommendation.recommendedAction]
     : ['대시보드 상세 조회', `${meta.agent} mock 분석 생성`, '후속 조치 후보 정리'];
 
   return (
@@ -1182,10 +1179,10 @@ function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'ove
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {[
-              ['전체 작업', `${data.total_tasks}건`],
-              ['완료', `${data.completed_tasks}건`],
-              ['진행중', '48건'],
-              ['대기', '8건'],
+              ['전체 작업', `${data.summary.totalTasks}건`],
+              ['완료', `${data.summary.completedTasks}건`],
+              ['진행중', `${data.summary.inProgressTasks}건`],
+              ['대기', `${data.summary.waitingTasks}건`],
             ].map(([label, value]) => (
               <Card key={label} className="p-4">
                 <div className="text-xs font-semibold text-[#64748B]">{label}</div>
@@ -1213,7 +1210,7 @@ function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'ove
                 </div>
               ) : type === 'activities' ? (
                 <div className="divide-y divide-slate-100">
-                  {activities.map((item, index) => (
+                  {data.recentActivities.map((item, index) => (
                     <div key={item.title} className="grid grid-cols-[90px_1fr_80px_100px] gap-3 px-3 py-2.5 text-xs">
                       <span className="font-semibold text-[#0b66e4]">활동 {index + 1}</span>
                       <span className="font-medium">{item.title}</span>
@@ -1224,14 +1221,29 @@ function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'ove
                 </div>
               ) : type === 'recommendations' ? (
                 <div className="divide-y divide-slate-100">
-                  {aiResultCards.map((item, index) => (
-                    <div key={item.title} className="grid grid-cols-[110px_1fr_1fr_120px] gap-3 px-3 py-2.5 text-xs">
-                      <PriorityLevelBadge value={index === 0 || index === 4 ? 'HIGH' : index === 3 ? 'MEDIUM' : 'LOW'} />
+                  {recommendationListMode && data.aiRecommendations.map((item, index) => (
+                    <button key={item.id} onClick={() => onRecommendationChange(index)} className={`grid w-full grid-cols-[110px_1fr_1fr_120px] gap-3 px-3 py-2.5 text-left text-xs hover:bg-blue-50/40 ${recommendationIndex === index ? 'bg-blue-50/60' : ''}`}>
+                      <PriorityLevelBadge value={item.priority} />
                       <span className="font-semibold">{item.title}</span>
                       <span className="text-[#64748B]">{item.desc}</span>
-                      <button className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[#0b66e4]">관련 화면 이동</button>
-                    </div>
+                      <span className="rounded-md border border-slate-300 bg-white px-2 py-1 text-center text-[#0b66e4]">{item.actionLabel}</span>
+                    </button>
                   ))}
+                  <div className="grid gap-3 p-3">
+                    {[
+                      ['요약', selectedRecommendation.detailSummary],
+                      ['분석 근거', selectedRecommendation.analysisReason],
+                      ['영향 범위', selectedRecommendation.impact],
+                      ['추정 원인', selectedRecommendation.rootCause],
+                      ['권장 조치', selectedRecommendation.recommendedAction],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                        <div className="font-semibold text-[#0b66e4]">{label}</div>
+                        <div className="mt-1 leading-5 text-[#334155]">{value}</div>
+                      </div>
+                    ))}
+                    <button className="h-9 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-[#0b66e4]">{selectedRecommendation.actionLabel}</button>
+                  </div>
                 </div>
               ) : (
                 <table className="w-full table-fixed text-left text-xs">
@@ -1239,7 +1251,7 @@ function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'ove
                     <tr>{['작업명', '단계', '담당자', '마감일', '상태', '우선순위'].map((head) => <th key={head} className="px-3 py-2 font-semibold">{head}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {taskRows.map((task) => (
+                    {data.tasks.map((task) => (
                       <tr key={task.no} className="hover:bg-blue-50/40">
                         <td className="truncate px-3 py-2 font-medium">{task.name}</td>
                         <td className="px-3 py-2">{task.stage}</td>
@@ -1260,7 +1272,12 @@ function DashboardDetailDialog({ type, data, stageStats, onClose }: { type: 'ove
                 <Sparkles size={16} className="text-orange-500" />
               </div>
               <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{meta.analysis}</div>
-              <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50/70 p-3 text-xs leading-5 text-orange-900">추천 조치: 담당자 부하와 검증 대기 작업을 함께 확인하고, HIGH 항목부터 다음 회의 안건으로 올리세요.</div>
+              <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50/70 p-3 text-xs leading-5 text-orange-900">
+                추천 조치: {type === 'recommendations' ? selectedRecommendation.recommendedAction : '담당자 부하와 검증 대기 작업을 함께 확인하고, HIGH 항목부터 다음 회의 안건으로 올리세요.'}
+              </div>
+              {type === 'recommendations' && (
+                <button className="mt-3 h-9 w-full rounded-md bg-[#0b66e4] px-3 text-xs font-semibold text-white">{selectedRecommendation.targetScreen} 이동</button>
+              )}
             </Card>
           </div>
 

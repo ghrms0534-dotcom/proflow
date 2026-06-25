@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import api from '../api';
-import type { User } from '../store';
+import api from '../services/api';
+import type { User } from '../types/user';
 
 interface LoginProps {
   onSwitch: () => void;
