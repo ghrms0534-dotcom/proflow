@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Bell,
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { DashboardService } from '../services/dashboardService';
 import { useAppStore } from '../store';
+import { DashboardAgent } from '../agents/dashboard/dashboardAgent';
 import type { DashboardData, DashboardLoadState, Project } from '../types/dashboard';
 
 interface DashboardProps {
@@ -1153,17 +1154,22 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
   }, [onClose]);
 
   const selectedRecommendation = data.aiRecommendations[recommendationIndex] ?? data.aiRecommendations[0];
+  const agentResult = useMemo(() => DashboardAgent.analyze({
+    data,
+    analysisMode: type === 'overall' ? 'overview' : type === 'stages' ? 'stageProgress' : type === 'tasks' ? 'taskStatus' : type === 'activities' ? 'recentActivity' : 'recommendation',
+    recommendation: selectedRecommendation,
+  }), [data, selectedRecommendation, type]);
   const meta = {
-    overall: { title: '전체 진행률 상세', badge: 'WARN', agent: 'Project Risk Agent', analysis: '완료 작업은 안정적으로 누적되고 있지만 진행 중 작업 48건이 검증 단계 대기와 겹쳐 있습니다. 마감 전 병목은 결함 조치와 산출물 검수에서 먼저 발생할 가능성이 높습니다.' },
-    stages: { title: '단계별 진행률 상세', badge: 'WARN', agent: 'Stage Agent', analysis: '분석·설계는 안정권이지만 개발·테스트와 검증·산출 사이 진행률 차이가 큽니다. 검증 대기 작업이 늘어나면 후반 일정 압박이 커집니다.' },
-    tasks: { title: '주요 작업 현황 상세', badge: 'SAFE', agent: 'Task Agent', analysis: '높음 우선순위 작업은 대부분 담당자가 배정되어 있습니다. 다만 결함 조치와 보안 점검이 같은 검증 구간에 있어 담당자 부하 확인이 필요합니다.' },
-    activities: { title: '최근 활동 상세', badge: 'SAFE', agent: 'Activity Agent', analysis: '최근 활동은 AI 분석, API 검토, 테스트 케이스 생성으로 이어져 흐름이 자연스럽습니다. 배포 전에는 WBS 초안과 결함 분석 결과를 작업 상태에 반영해야 합니다.' },
-    recommendations: { title: selectedRecommendation.title, badge: selectedRecommendation.priority === 'HIGH' ? 'CRITICAL' : selectedRecommendation.priority === 'MEDIUM' ? 'WARN' : 'SAFE', agent: 'Recommendation Agent', analysis: selectedRecommendation.analysisReason },
+    overall: { title: '전체 진행률 상세' },
+    stages: { title: '단계별 진행률 상세' },
+    tasks: { title: '주요 작업 현황 상세' },
+    activities: { title: '최근 활동 상세' },
+    recommendations: { title: selectedRecommendation.title },
   }[type];
 
   const history = type === 'recommendations'
-    ? [selectedRecommendation.detailSummary, selectedRecommendation.rootCause, selectedRecommendation.recommendedAction]
-    : ['대시보드 상세 조회', `${meta.agent} mock 분석 생성`, '후속 조치 후보 정리'];
+    ? agentResult.popupInsights
+    : ['대시보드 상세 조회', `DashboardAgent ${agentResult.riskLevel} 분석 생성`, `이전 대비 ${agentResult.memoryDiff}`];
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -1171,7 +1177,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-[#0b1f44]">{meta.title}</h2>
-            <ReleaseCheckBadge value={meta.badge} />
+            <ReleaseCheckBadge value={agentResult.riskLevel} />
           </div>
           <button onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#0b1f44] hover:bg-slate-50">닫기</button>
         </div>
@@ -1268,12 +1274,20 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
 
             <Card className="col-span-12 p-4 lg:col-span-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">{meta.agent}</h3>
+                <h3 className="text-sm font-semibold">DashboardAgent</h3>
                 <Sparkles size={16} className="text-orange-500" />
               </div>
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{meta.analysis}</div>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{agentResult.summary}</div>
+              {agentResult.detectedIssues.length > 0 && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-[#334155]">
+                  {agentResult.detectedIssues.map((issue) => <div key={issue}>- {issue}</div>)}
+                </div>
+              )}
               <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50/70 p-3 text-xs leading-5 text-orange-900">
-                추천 조치: {type === 'recommendations' ? selectedRecommendation.recommendedAction : '담당자 부하와 검증 대기 작업을 함께 확인하고, HIGH 항목부터 다음 회의 안건으로 올리세요.'}
+                추천 조치: {agentResult.recommendedActions[0]}
+              </div>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#64748B]">
+                원인: {agentResult.rootCause}<br />신뢰도: {Math.round(agentResult.confidence * 100)}%<br />Memory: {agentResult.memoryDiff}
               </div>
               {type === 'recommendations' && (
                 <button className="mt-3 h-9 w-full rounded-md bg-[#0b66e4] px-3 text-xs font-semibold text-white">{selectedRecommendation.targetScreen} 이동</button>
@@ -4932,3 +4946,4 @@ function FlaskIcon(props: { size?: number }) {
 function GitBranchIcon(props: { size?: number; className?: string }) {
   return <Code2 {...props} />;
 }
+
