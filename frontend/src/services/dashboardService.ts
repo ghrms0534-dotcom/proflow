@@ -1,4 +1,4 @@
-import { mockDashboard, mockProjects } from '../data/dashboardMock';
+﻿import { mockDashboard, mockProjects } from '../data/dashboardMock';
 import type { DashboardData, Project } from '../types/dashboard';
 import api from './api';
 
@@ -36,7 +36,6 @@ type BackendDashboard = {
     client: string;
   };
   stages?: { name: string; progress: number }[];
-  major_tasks?: { no: number; name: string; owner: string; status: string; due_date: string }[];
 };
 
 function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardData {
@@ -54,21 +53,21 @@ function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardDa
     },
     stages: mockDashboard.stages.map((stage, index) => ({
       ...stage,
-      name: data.stages?.[index]?.name ?? stage.name,
+      name: toKoreanStage(data.stages?.[index]?.name ?? stage.name),
       progress: data.stages?.[index]?.progress ?? stage.progress,
     })),
-    tasks: data.major_tasks?.map((task) => ({
-      no: task.no,
-      name: task.name,
-      stage: '개발 · 테스트',
-      assignee: task.owner,
-      due: task.due_date,
-      status: task.status,
-      priority: '보통',
-    })) ?? mockDashboard.tasks,
+    tasks: mockDashboard.tasks,
     projectInfo: {
       ...mockDashboard.projectInfo,
       customer: summary?.client ?? mockDashboard.projectInfo.customer,
     },
   };
+}
+
+function toKoreanStage(value: string): string {
+  return {
+    'Analysis and Design': '분석 · 설계',
+    'Development and Test': '개발 · 테스트',
+    'Validation and Delivery': '검증 · 산출',
+  }[value] ?? value;
 }

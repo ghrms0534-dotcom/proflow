@@ -1,4 +1,4 @@
-import type { AiRecommendation, DashboardData } from '../../types/dashboard';
+﻿import type { AiRecommendation, DashboardData } from '../../types/dashboard';
 import type { DashboardAgentResult, DashboardRiskLevel } from './dashboardAgent.types';
 
 type Draft = Omit<DashboardAgentResult, 'memoryDiff'>;
@@ -23,7 +23,7 @@ export function analyzeProgress(data: DashboardData): Draft {
   return {
     ...analyzeOverview(data),
     summary: `완료 ${data.summary.completedTasks}건, 진행 중 ${data.summary.inProgressTasks}건으로 전체 진행률은 ${data.summary.progress}%입니다.`,
-    rootCause: '완료율은 유지되지만 진행 중 작업이 검증 단계로 넘어가기 전 병목을 만들 수 있습니다.',
+    rootCause: '완료율은 유지되지만 진행 중 작업이 검증 단계로 넘어가기 전에 병목을 만들 수 있습니다.',
   };
 }
 

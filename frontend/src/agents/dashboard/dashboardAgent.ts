@@ -10,6 +10,7 @@ import { updateDashboardAgentMemory } from './dashboardMemory';
 import type { DashboardAgentInput, DashboardAgentResult } from './dashboardAgent.types';
 
 export const DashboardAgent = {
+  name: 'DashboardAgent',
   analyze(input: DashboardAgentInput): DashboardAgentResult {
     const draft = (() => {
       switch (input.analysisMode) {

@@ -34,6 +34,7 @@ import {
 import { DashboardService } from '../services/dashboardService';
 import { useAppStore } from '../store';
 import { DashboardAgent } from '../agents/dashboard/dashboardAgent';
+import type { DashboardAnalysisMode } from '../agents/dashboard/dashboardAgent.types';
 import type { DashboardData, DashboardLoadState, Project } from '../types/dashboard';
 
 interface DashboardProps {
@@ -947,7 +948,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
       <section className="flex min-w-0 flex-1 flex-col">
         <Header projects={projects} currentProjectId={currentProjectId} setProjectId={setProjectId} userName={user?.name ?? '홍길동'} userRole={user?.role ?? 'PMO / PM'} />
-        {activeMenu === '통합 대시보드' ? <DashboardHome data={dashboardData} loadState={dashboardLoadState} error={dashboardError} /> : <WorkScreen title={activeMenu} />}
+        {activeMenu === '통합 대시보드' ? <DashboardHome data={dashboardData} loadState={dashboardLoadState} error={dashboardError} /> : <WorkScreen title={activeMenu} onSelectMenu={setActiveMenu} />}
       </section>
     </div>
   );
@@ -1066,8 +1067,8 @@ function DashboardHome({ data, loadState, error }: { data: DashboardData | null;
                 <col className="w-24" />
                 <col className="w-20" />
                 <col className="w-20" />
-                <col className="w-16" />
-                <col className="w-16" />
+                <col className="w-20" />
+                <col className="w-20" />
               </colgroup>
               <thead className="bg-slate-50 text-xs text-[#64748B]">
                 <tr>
@@ -1082,8 +1083,8 @@ function DashboardHome({ data, loadState, error }: { data: DashboardData | null;
                     <td className="w-24 px-2.5 py-1.5">{task.stage}</td>
                     <td className="w-20 whitespace-nowrap px-2.5 py-1.5">{task.assignee}</td>
                     <td className="w-20 whitespace-nowrap px-2.5 py-1.5">{task.due}</td>
-                    <td className="w-16 whitespace-nowrap px-2.5 py-1.5"><StatusBadge value={task.status} /></td>
-                    <td className="w-16 whitespace-nowrap px-2.5 py-1.5"><Priority value={task.priority} /></td>
+                    <td className="w-20 whitespace-nowrap px-2.5 py-1.5"><StatusBadge value={task.status} /></td>
+                    <td className="w-20 whitespace-nowrap px-2.5 py-1.5"><Priority value={task.priority} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -1154,11 +1155,14 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
   }, [onClose]);
 
   const selectedRecommendation = data.aiRecommendations[recommendationIndex] ?? data.aiRecommendations[0];
-  const agentResult = useMemo(() => DashboardAgent.analyze({
-    data,
-    analysisMode: type === 'overall' ? 'overview' : type === 'stages' ? 'stageProgress' : type === 'tasks' ? 'taskStatus' : type === 'activities' ? 'recentActivity' : 'recommendation',
-    recommendation: selectedRecommendation,
-  }), [data, selectedRecommendation, type]);
+  const analysisMode: DashboardAnalysisMode = type === 'overall' ? 'overview' : type === 'stages' ? 'stageProgress' : type === 'tasks' ? 'taskStatus' : type === 'activities' ? 'recentActivity' : 'recommendation';
+  const agentResult = useMemo(() => {
+    const input = { data, analysisMode, recommendation: selectedRecommendation };
+    console.log('[DashboardAgent input]', input);
+    const output = DashboardAgent.analyze(input);
+    console.log('[DashboardAgent output]', output);
+    return output;
+  }, [analysisMode, data, selectedRecommendation]);
   const meta = {
     overall: { title: '전체 진행률 상세' },
     stages: { title: '단계별 진행률 상세' },
@@ -1177,7 +1181,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-[#0b1f44]">{meta.title}</h2>
-            <ReleaseCheckBadge value={agentResult.riskLevel} />
+            <ReleaseCheckBadge value={agentResult?.riskLevel ?? 'WARN'} />
           </div>
           <button onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#0b1f44] hover:bg-slate-50">닫기</button>
         </div>
@@ -1277,17 +1281,18 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
                 <h3 className="text-sm font-semibold">DashboardAgent</h3>
                 <Sparkles size={16} className="text-orange-500" />
               </div>
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{agentResult.summary}</div>
-              {agentResult.detectedIssues.length > 0 && (
+              <div className="mt-2 text-[11px] font-medium text-[#64748B]">mode: {analysisMode}</div>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{agentResult?.summary ?? 'DashboardAgent 분석 결과가 없습니다.'}</div>
+              {agentResult?.detectedIssues.length > 0 && (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-[#334155]">
                   {agentResult.detectedIssues.map((issue) => <div key={issue}>- {issue}</div>)}
                 </div>
               )}
               <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50/70 p-3 text-xs leading-5 text-orange-900">
-                추천 조치: {agentResult.recommendedActions[0]}
+                추천 조치: {agentResult?.recommendedActions[0] ?? '분석 결과를 확인할 수 없습니다.'}
               </div>
               <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#64748B]">
-                원인: {agentResult.rootCause}<br />신뢰도: {Math.round(agentResult.confidence * 100)}%<br />Memory: {agentResult.memoryDiff}
+                riskLevel: {agentResult?.riskLevel ?? 'N/A'}<br />confidence: {agentResult ? Math.round(agentResult.confidence * 100) : 0}%<br />memoryDiff: {agentResult?.memoryDiff ?? 'N/A'}
               </div>
               {type === 'recommendations' && (
                 <button className="mt-3 h-9 w-full rounded-md bg-[#0b66e4] px-3 text-xs font-semibold text-white">{selectedRecommendation.targetScreen} 이동</button>
@@ -1363,7 +1368,263 @@ function AiPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   );
 }
 
-function WorkScreen({ title }: { title: string }) {
+type WorkspaceItem = {
+  title: string;
+  progress: number;
+  docs: number;
+  riskLevel: 'SAFE' | 'WARN' | 'CRITICAL';
+  status: string;
+};
+
+type WorkspaceAgent = {
+  summary: string;
+  riskLevel: 'SAFE' | 'WARN' | 'CRITICAL';
+  recommendations: string[];
+  nextActions: string[];
+};
+
+type WorkspaceModal = 'task' | 'file' | 'folder' | null;
+
+type WorkspaceTaskDraft = {
+  title: string;
+  description: string;
+  priority: string;
+  sectionType: string;
+};
+
+const analysisWorkspaceItems: WorkspaceItem[] = [
+  { title: '요구사항 관리', progress: 72, docs: 43, riskLevel: 'WARN', status: '진행중' },
+  { title: '일정 관리', progress: 64, docs: 12, riskLevel: 'WARN', status: '진행중' },
+  { title: 'WBS 관리', progress: 58, docs: 18, riskLevel: 'CRITICAL', status: '검토중' },
+  { title: '화면 설계', progress: 76, docs: 14, riskLevel: 'SAFE', status: '진행중' },
+  { title: 'DB 설계', progress: 69, docs: 9, riskLevel: 'SAFE', status: '진행중' },
+  { title: 'API 설계', progress: 61, docs: 18, riskLevel: 'WARN', status: '검토중' },
+];
+
+const developmentWorkspaceItems: WorkspaceItem[] = [
+  { title: '개발 관리', progress: 41, docs: 26, riskLevel: 'WARN', status: '진행중' },
+  { title: '형상 관리', progress: 55, docs: 8, riskLevel: 'SAFE', status: '진행중' },
+  { title: '소스 관리', progress: 48, docs: 132, riskLevel: 'WARN', status: '진행중' },
+  { title: '단위 테스트', progress: 38, docs: 54, riskLevel: 'CRITICAL', status: '대기' },
+  { title: '통합 테스트', progress: 24, docs: 21, riskLevel: 'CRITICAL', status: '대기' },
+  { title: '코드 리뷰', progress: 46, docs: 17, riskLevel: 'WARN', status: '진행중' },
+  { title: '배포 준비', progress: 33, docs: 11, riskLevel: 'WARN', status: '대기' },
+];
+
+const validationWorkspaceItems: WorkspaceItem[] = [
+  { title: '품질 검증', progress: 32, docs: 15, riskLevel: 'WARN', status: '대기' },
+  { title: '결함 관리', progress: 44, docs: 28, riskLevel: 'CRITICAL', status: '진행중' },
+  { title: '문서 관리', progress: 67, docs: 86, riskLevel: 'SAFE', status: '진행중' },
+  { title: '산출물 관리', progress: 52, docs: 31, riskLevel: 'WARN', status: '검토중' },
+  { title: '배포 관리', progress: 29, docs: 7, riskLevel: 'CRITICAL', status: '대기' },
+];
+
+const analysisWorkspaceAgent: WorkspaceAgent = {
+  summary: '요구사항과 WBS 기준선은 잡혔지만 API 설계 누락 항목이 후행 작업에 영향을 줄 수 있습니다.',
+  riskLevel: 'WARN',
+  recommendations: ['누락 요구사항을 API 설계와 연결', 'WBS 선후행 관계 재검토', '검토중 산출물 우선 승인'],
+  nextActions: ['요구사항 추적성 점검', 'API 설계 리뷰 회의 등록'],
+};
+
+const developmentWorkspaceAgent: WorkspaceAgent = {
+  summary: '개발 진행은 시작됐지만 테스트 준비율이 낮아 통합 검증 병목 가능성이 있습니다.',
+  riskLevel: 'CRITICAL',
+  recommendations: ['단위 테스트 케이스 우선 보강', '소스 변경 영향 범위 확인', '코드 리뷰 대기 건 정리'],
+  nextActions: ['테스트 담당자 배정 확인', '리뷰 미완료 PR 목록 정리'],
+};
+
+const validationWorkspaceAgent: WorkspaceAgent = {
+  summary: '결함과 배포 준비 항목이 동시에 쌓여 검증 후반 리스크가 큽니다.',
+  riskLevel: 'CRITICAL',
+  recommendations: ['Critical 결함 우선 조치', '산출물 승인 흐름 점검', '배포 체크리스트 선검토'],
+  nextActions: ['결함 관리 화면 확인', '배포 관리 체크리스트 리뷰'],
+};
+
+function SectionWorkspace({ title, agentName, items, agent, onSelectMenu }: { title: string; agentName: string; items: WorkspaceItem[]; agent: WorkspaceAgent; onSelectMenu: (menu: string) => void }) {
+  const riskCls = agent.riskLevel === 'CRITICAL' ? 'bg-red-50 text-red-700' : agent.riskLevel === 'WARN' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700';
+  const [modal, setModal] = useState<WorkspaceModal>(null);
+  const [taskDraft, setTaskDraft] = useState<WorkspaceTaskDraft>({ title: '', description: '', priority: '보통', sectionType: title });
+  const [createdTasks, setCreatedTasks] = useState<WorkspaceTaskDraft[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [folderFiles, setFolderFiles] = useState<File[]>([]);
+
+  const addFiles = (nextFiles: FileList | File[], target: 'file' | 'folder') => {
+    const list = Array.from(nextFiles);
+    if (target === 'file') setFiles(list);
+    else setFolderFiles(list);
+  };
+
+  const saveTask = () => {
+    if (!taskDraft.title.trim()) return;
+    setCreatedTasks((tasks) => [...tasks, taskDraft]);
+    setTaskDraft({ title: '', description: '', priority: '보통', sectionType: title });
+    setModal(null);
+  };
+
+  return (
+    <PageShell
+      title={title}
+      subtitle={`${title} 업무를 Command Center 형태로 확인합니다.`}
+      actions={<span className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-[#64748B]">Workspace</span>}
+    >
+      <Card className="mb-3 min-h-[20vh] p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            [ClipboardCheck, '신규 작업 생성', () => setModal('task')],
+            [FileText, '파일 업로드', () => setModal('file')],
+            [Database, '폴더 업로드', () => setModal('folder')],
+            [Search, '기존 작업 불러오기', undefined],
+          ].map(([Icon, label, onClick]) => {
+            const ButtonIcon = Icon as typeof ClipboardCheck;
+            return (
+              <button key={label as string} onClick={onClick as (() => void) | undefined} className="flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-[#0b1f44] shadow-sm hover:border-[#0b66e4] hover:text-[#0b66e4]">
+                <ButtonIcon size={15} />
+                {label as string}
+              </button>
+            );
+          })}
+          <span className="ml-auto text-xs font-medium text-[#64748B]">임시 작업 {createdTasks.length}건 · 파일 {files.length}건 · 폴더 파일 {folderFiles.length}건</span>
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-12 gap-3.5">
+        <Card className="col-span-12 p-4 lg:col-span-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">SubMenu Status Panel</h2>
+            <span className="text-xs font-medium text-[#64748B]">{items.length}개 업무 영역</span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {items.map((item) => {
+              const itemRiskCls = item.riskLevel === 'CRITICAL' ? 'bg-red-50 text-red-700' : item.riskLevel === 'WARN' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700';
+              return (
+                <button key={item.title} onClick={() => onSelectMenu(item.title)} className="rounded-lg border border-slate-200 bg-white p-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-[#0b66e4] hover:shadow-[0_6px_16px_rgba(15,23,42,0.08)]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-semibold text-[#0b1f44]">{item.title}</div>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${itemRiskCls}`}>{item.riskLevel}</span>
+                  </div>
+                  <div className="mt-3 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-[#0b66e4]" style={{ width: `${item.progress}%` }} /></div>
+                  <div className="mt-3 grid grid-cols-2 gap-y-1 text-xs text-[#64748B]">
+                    <span>진행률</span><b className="text-right text-[#0b1f44]">{item.progress}%</b>
+                    <span>문서 개수</span><b className="text-right text-[#0b1f44]">{item.docs}건</b>
+                    <span>Status</span><b className="text-right text-[#0b1f44]">{item.status}</b>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+
+        <Card className="col-span-12 p-4 lg:col-span-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold">{agentName}</h2>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${riskCls}`}>{agent.riskLevel}</span>
+          </div>
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-[#334155]">{agent.summary}</div>
+          <div className="mt-3 text-xs font-semibold text-[#334155]">recommendations</div>
+          <div className="mt-2 space-y-2">
+            {agent.recommendations.map((item) => <div key={item} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-[#64748B]">{item}</div>)}
+          </div>
+          <div className="mt-3 text-xs font-semibold text-[#334155]">nextActions</div>
+          <div className="mt-2 space-y-2">
+            {agent.nextActions.map((item) => <div key={item} className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-[#0b66e4]">{item}</div>)}
+          </div>
+          <button className="mt-4 h-9 w-full rounded-md bg-[#0b66e4] text-xs font-semibold text-white">AI 분석 실행</button>
+        </Card>
+      </div>
+
+      {modal && (
+        <WorkspaceActionModal
+          modal={modal}
+          taskDraft={taskDraft}
+          setTaskDraft={setTaskDraft}
+          files={modal === 'folder' ? folderFiles : files}
+          onFiles={(nextFiles) => addFiles(nextFiles, modal === 'folder' ? 'folder' : 'file')}
+          onSaveTask={saveTask}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </PageShell>
+  );
+}
+
+function WorkspaceActionModal({ modal, taskDraft, setTaskDraft, files, onFiles, onSaveTask, onClose }: { modal: Exclude<WorkspaceModal, null>; taskDraft: WorkspaceTaskDraft; setTaskDraft: (draft: WorkspaceTaskDraft) => void; files: File[]; onFiles: (files: FileList | File[]) => void; onSaveTask: () => void; onClose: () => void }) {
+  const isFolder = modal === 'folder';
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+      <div onClick={(event) => event.stopPropagation()} className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-[#0b1f44]">{modal === 'task' ? '신규 작업 생성' : isFolder ? '폴더 업로드' : '파일 업로드'}</h2>
+          <button onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#0b1f44] hover:bg-slate-50">닫기</button>
+        </div>
+
+        <div className="p-4">
+          {modal === 'task' ? (
+            <div className="grid gap-3">
+              <label className="grid gap-1 text-xs font-semibold text-[#334155]">
+                title
+                <input value={taskDraft.title} onChange={(event) => setTaskDraft({ ...taskDraft, title: event.target.value })} className="h-9 rounded-md border border-slate-300 px-3 text-xs font-medium outline-none focus:border-[#0b66e4]" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-[#334155]">
+                description
+                <textarea value={taskDraft.description} onChange={(event) => setTaskDraft({ ...taskDraft, description: event.target.value })} className="min-h-24 rounded-md border border-slate-300 px-3 py-2 text-xs font-medium outline-none focus:border-[#0b66e4]" />
+              </label>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-[#334155]">
+                  priority
+                  <select value={taskDraft.priority} onChange={(event) => setTaskDraft({ ...taskDraft, priority: event.target.value })} className="h-9 rounded-md border border-slate-300 px-3 text-xs font-medium outline-none focus:border-[#0b66e4]">
+                    {['높음', '보통', '낮음'].map((value) => <option key={value}>{value}</option>)}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-[#334155]">
+                  sectionType
+                  <input value={taskDraft.sectionType} onChange={(event) => setTaskDraft({ ...taskDraft, sectionType: event.target.value })} className="h-9 rounded-md border border-slate-300 px-3 text-xs font-medium outline-none focus:border-[#0b66e4]" />
+                </label>
+              </div>
+              <button onClick={onSaveTask} className="h-9 rounded-md bg-[#0b66e4] text-xs font-semibold text-white">mock 작업 추가</button>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              <label
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  onFiles(event.dataTransfer.files);
+                }}
+                className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-[#64748B] hover:border-[#0b66e4] hover:bg-blue-50/40"
+              >
+                <FileText className="mb-2 text-[#0b66e4]" size={24} />
+                {isFolder ? '폴더를 선택하거나 파일을 드롭하세요.' : '파일을 선택하거나 드래그 앤 드롭하세요.'}
+                <input
+                  type="file"
+                  multiple
+                  onChange={(event) => event.target.files && onFiles(event.target.files)}
+                  className="hidden"
+                  {...(isFolder ? { webkitdirectory: '', directory: '' } : {})}
+                />
+              </label>
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-slate-200">
+                {files.length === 0 ? (
+                  <div className="p-3 text-xs text-[#64748B]">선택된 파일이 없습니다.</div>
+                ) : files.map((file) => (
+                  <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-xs last:border-b-0">
+                    <span className="truncate font-medium text-[#0b1f44]">{file.webkitRelativePath || file.name}</span>
+                    <span className="ml-3 shrink-0 text-[#64748B]">{Math.ceil(file.size / 1024)} KB</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkScreen({ title, onSelectMenu }: { title: string; onSelectMenu: (menu: string) => void }) {
+  if (title === '1. 분석 · 설계') return <SectionWorkspace title="분석 · 설계" agentName="Analysis Agent" items={analysisWorkspaceItems} agent={analysisWorkspaceAgent} onSelectMenu={onSelectMenu} />;
+  if (title === '2. 개발 · 테스트') return <SectionWorkspace title="개발 · 테스트" agentName="Development Agent" items={developmentWorkspaceItems} agent={developmentWorkspaceAgent} onSelectMenu={onSelectMenu} />;
+  if (title === '3. 검증 · 산출') return <SectionWorkspace title="검증 · 산출" agentName="Validation Agent" items={validationWorkspaceItems} agent={validationWorkspaceAgent} onSelectMenu={onSelectMenu} />;
   if (title === '요구사항 관리') return <RequirementsPage title={title} />;
   if (title === '일정 관리') return <SchedulePage title={title} />;
   if (title === 'WBS 관리') return <WbsPage title={title} />;

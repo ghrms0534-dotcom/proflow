@@ -19,8 +19,8 @@ export function updateDashboardAgentMemory(nextRiskLevel: DashboardRiskLevel, su
 
 function readMemory(): DashboardAgentMemory {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    return { agentName: 'DashboardAgent', ...JSON.parse(localStorage.getItem(KEY) ?? '{}') };
   } catch {
-    return {};
+    return { agentName: 'DashboardAgent' };
   }
 }

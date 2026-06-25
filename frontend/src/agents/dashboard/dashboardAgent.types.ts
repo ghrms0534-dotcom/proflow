@@ -1,7 +1,9 @@
 import type { AiRecommendation, DashboardData } from '../../types/dashboard';
+import type { AgentResponse, AgentRiskLevel } from '../core/agent.types';
+import type { AgentMemory } from '../core/memory.types';
 
 export type DashboardAnalysisMode = 'overview' | 'progress' | 'stageProgress' | 'taskStatus' | 'recentActivity' | 'recommendation';
-export type DashboardRiskLevel = 'SAFE' | 'WARN' | 'CRITICAL';
+export type DashboardRiskLevel = AgentRiskLevel;
 
 export interface DashboardAgentInput {
   data: DashboardData;
@@ -9,19 +11,10 @@ export interface DashboardAgentInput {
   recommendation?: AiRecommendation;
 }
 
-export interface DashboardAgentResult {
-  summary: string;
-  riskLevel: DashboardRiskLevel;
-  detectedIssues: string[];
-  rootCause: string;
-  recommendedActions: string[];
-  popupInsights: string[];
-  confidence: number;
+export interface DashboardAgentResult extends AgentResponse {
   memoryDiff: string;
 }
 
-export interface DashboardAgentMemory {
-  lastRiskLevel?: DashboardRiskLevel;
-  lastSummary?: string;
-  updatedAt?: string;
+export interface DashboardAgentMemory extends AgentMemory {
+  agentName: 'DashboardAgent';
 }
