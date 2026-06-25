@@ -2,7 +2,7 @@ import axios from 'axios';
 import { useAppStore } from './store';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8100/api',
+  baseURL: '/api',
 });
 
 api.interceptors.request.use((config) => {
