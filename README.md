@@ -6,6 +6,9 @@ AI Agent 기반 프로젝트 수행 관리 플랫폼을 목표로 개발 중인 
 
 ---
 
+<img width="1917" height="865" alt="proflow" src="https://github.com/user-attachments/assets/0f9288f9-2676-49b9-ba86-9ab0cb35b603" />
+
+
 ## 프로젝트 목표
 
 ProFlow는 프로젝트 수행 과정에서 발생하는 일정, 산출물, 결함, 업무 흐름을 한 화면에서 관리하고, 향후 AI Agent를 통해 프로젝트 진행 상황 분석과 업무 보조를 제공하는 것을 목표로 합니다.
