@@ -34,6 +34,8 @@ import {
 import { DashboardService } from '../services/dashboardService';
 import { useAppStore } from '../store';
 import { DashboardAgent } from '../agents/dashboard/dashboardAgent';
+import { getAgentMetadata } from '../agents/agentRegistry';
+import { AgentCard } from '../components/AgentCard';
 import type { DashboardAnalysisMode } from '../agents/dashboard/dashboardAgent.types';
 import type { DashboardData, DashboardLoadState, Project } from '../types/dashboard';
 
@@ -54,6 +56,15 @@ const sidebarMenu: MenuGroup[] = [
   { title: '3. 검증 · 산출', icon: ShieldCheck, children: ['품질 검증', '결함 관리', '문서 관리', '산출물 관리', '배포 관리'] },
   { title: '시스템 관리', icon: Settings, children: ['계정 관리', 'AI 설정', '프로젝트 구성'] },
 ];
+
+const cleanMenuTitle = (title: string) => title.replace(/^\d+\.\s*/, '');
+
+const getBreadcrumb = (title: string) => {
+  const group = sidebarMenu.find((item) => item.title === title || cleanMenuTitle(item.title) === title || item.children?.includes(title));
+  if (!group) return [title];
+  const groupTitle = cleanMenuTitle(group.title);
+  return group.children?.includes(title) ? [groupTitle, title] : [groupTitle];
+};
 
 const dashboardActivityIcons = {
   flask: TestTube2,
@@ -862,12 +873,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const [dashboardLoadState, setDashboardLoadState] = useState<DashboardLoadState>('loading');
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState('통합 대시보드');
-  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    '1. 분석 · 설계': true,
-    '2. 개발 · 테스트': true,
-    '3. 검증 · 산출': true,
-    '시스템 관리': true,
-  });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     DashboardService.getProjects().then(({ data, fallback, error }) => {
@@ -892,44 +898,40 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#f4f7fb] text-[#0b1f44]">
-      <aside className="flex w-[200px] shrink-0 flex-col bg-[#062445] text-slate-200 shadow-xl">
-        <div className="flex h-14 items-center gap-2 border-b border-white/10 px-3">
+      <aside className={`flex shrink-0 flex-col bg-[#062445] text-slate-200 shadow-xl transition-[width] duration-200 ease-in-out ${sidebarCollapsed ? 'w-[64px]' : 'w-[200px]'}`}>
+        <div className={`flex h-14 items-center gap-2 border-b border-white/10 px-3 ${sidebarCollapsed ? 'justify-center' : ''}`}>
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/20">
             <Box className="text-white" size={22} />
           </div>
-          <div className="min-w-0">
+          {!sidebarCollapsed && <div className="min-w-0">
             <div className="text-base font-semibold text-white">ProFlow</div>
             <div className="truncate text-[9px] font-normal text-slate-300">AI 기반 프로젝트 수행 지원 플랫폼</div>
-          </div>
+          </div>}
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
           {sidebarMenu.map((item) => {
             const Icon = item.icon;
-            const selected = activeMenu === item.title;
-            const open = openMenus[item.title];
+            const selected = activeMenu === item.title || !!item.children?.includes(activeMenu);
             return (
               <div key={item.title} className="mb-1">
                 <button
-                  onClick={() => {
-                    setActiveMenu(item.title);
-                    if (item.children) setOpenMenus((prev) => ({ ...prev, [item.title]: !prev[item.title] }));
-                  }}
-                  className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[10px] font-medium ${selected ? 'bg-[#0b66e4] text-white' : 'text-slate-100 hover:bg-white/8'}`}
+                  onClick={() => setActiveMenu(item.title)}
+                  title={sidebarCollapsed ? item.title : undefined}
+                  className={`flex w-full items-center rounded-md py-1.5 text-[10px] ${sidebarCollapsed ? 'justify-center px-0' : 'px-2'} ${selected ? 'bg-[#031a33] font-bold text-white shadow-inner' : 'font-medium text-slate-100 hover:bg-white/8'}`}
                 >
                   <span className="flex items-center gap-2">
                     <Icon size={14} />
-                    {item.title}
+                    {!sidebarCollapsed && item.title}
                   </span>
-                  {item.children && (open ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
                 </button>
-                {item.children && open && (
+                {item.children && !sidebarCollapsed && (
                   <div className="mt-0.5 space-y-0.5 border-b border-white/10 pb-1.5 pl-7">
                     {item.children.map((child) => (
                       <button
                         key={child}
                         onClick={() => setActiveMenu(child)}
-                        className={`block w-full rounded-md px-2 py-0.5 text-left text-[10px] ${activeMenu === child ? 'bg-white/10 text-white' : 'text-slate-200 hover:bg-white/8 hover:text-white'}`}
+                        className={`block w-full rounded-md border-l-4 px-2 py-0.5 text-left text-[10px] ${activeMenu === child ? 'border-[#0b66e4] bg-blue-100 font-bold text-[#0b1f44]' : 'border-transparent text-slate-200 hover:bg-white/8 hover:text-white'}`}
                       >
                         {child}
                       </button>
@@ -941,23 +943,23 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           })}
         </nav>
 
-        <button onClick={onLogout} className="m-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10">
-          <Settings size={15} /> 로그아웃
+        <button onClick={onLogout} title={sidebarCollapsed ? '로그아웃' : undefined} className={`m-2 flex items-center gap-2 rounded-md py-1.5 text-[11px] font-medium text-slate-100 hover:bg-white/10 ${sidebarCollapsed ? 'justify-center px-0' : 'px-2'}`}>
+          <Settings size={15} /> {!sidebarCollapsed && '로그아웃'}
         </button>
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col">
-        <Header projects={projects} currentProjectId={currentProjectId} setProjectId={setProjectId} userName={user?.name ?? '홍길동'} userRole={user?.role ?? 'PMO / PM'} />
+        <Header projects={projects} currentProjectId={currentProjectId} setProjectId={setProjectId} userName={user?.name ?? '홍길동'} userRole={user?.role ?? 'PMO / PM'} onToggleSidebar={() => setSidebarCollapsed((value) => !value)} />
         {activeMenu === '통합 대시보드' ? <DashboardHome data={dashboardData} loadState={dashboardLoadState} error={dashboardError} /> : <WorkScreen title={activeMenu} onSelectMenu={setActiveMenu} />}
       </section>
     </div>
   );
 }
 
-function Header({ projects, currentProjectId, setProjectId, userName, userRole }: { projects: Project[]; currentProjectId: string | null; setProjectId: (id: string) => void; userName: string; userRole: string }) {
+function Header({ projects, currentProjectId, setProjectId, userName, userRole, onToggleSidebar }: { projects: Project[]; currentProjectId: string | null; setProjectId: (id: string) => void; userName: string; userRole: string; onToggleSidebar: () => void }) {
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-slate-200 bg-white">
-      <button className="flex h-full w-14 items-center justify-center border-r border-slate-200 text-[#0b1f44]">
+      <button type="button" onClick={onToggleSidebar} aria-label="사이드바 열기/닫기" className="flex h-full w-14 items-center justify-center border-r border-slate-200 text-[#0b1f44] hover:bg-slate-50">
         <Menu size={21} />
       </button>
       <div className="flex w-[248px] items-center gap-2 px-3">
@@ -1399,6 +1401,7 @@ const analysisWorkspaceItems: WorkspaceItem[] = [
   { title: '화면 설계', progress: 76, docs: 14, riskLevel: 'SAFE', status: '진행중' },
   { title: 'DB 설계', progress: 69, docs: 9, riskLevel: 'SAFE', status: '진행중' },
   { title: 'API 설계', progress: 61, docs: 18, riskLevel: 'WARN', status: '검토중' },
+  { title: '산출물 관리(설계)', progress: 57, docs: 16, riskLevel: 'WARN', status: '승인대기' },
 ];
 
 const developmentWorkspaceItems: WorkspaceItem[] = [
@@ -1419,11 +1422,17 @@ const validationWorkspaceItems: WorkspaceItem[] = [
   { title: '배포 관리', progress: 29, docs: 7, riskLevel: 'CRITICAL', status: '대기' },
 ];
 
+const systemWorkspaceItems: WorkspaceItem[] = [
+  { title: '계정 관리', progress: 82, docs: 18, riskLevel: 'SAFE', status: '운영중' },
+  { title: 'AI 설정', progress: 64, docs: 9, riskLevel: 'WARN', status: '점검중' },
+  { title: '프로젝트 구성', progress: 76, docs: 14, riskLevel: 'SAFE', status: '운영중' },
+];
+
 const analysisWorkspaceAgent: WorkspaceAgent = {
-  summary: '요구사항과 WBS 기준선은 잡혔지만 API 설계 누락 항목이 후행 작업에 영향을 줄 수 있습니다.',
+  summary: '요구사항과 WBS 기준선은 잡혔지만 API 설계 누락과 설계 산출물 승인 대기가 후행 작업에 영향을 줄 수 있습니다.',
   riskLevel: 'WARN',
-  recommendations: ['누락 요구사항을 API 설계와 연결', 'WBS 선후행 관계 재검토', '검토중 산출물 우선 승인'],
-  nextActions: ['요구사항 추적성 점검', 'API 설계 리뷰 회의 등록'],
+  recommendations: ['누락 요구사항을 API 설계와 연결', 'WBS 선후행 관계 재검토', '설계 산출물 문서 검토 및 승인 처리'],
+  nextActions: ['요구사항 추적성 점검', 'API 설계 리뷰 회의 등록', '산출물 관리(설계) 승인 대기 확인'],
 };
 
 const developmentWorkspaceAgent: WorkspaceAgent = {
@@ -1440,8 +1449,15 @@ const validationWorkspaceAgent: WorkspaceAgent = {
   nextActions: ['결함 관리 화면 확인', '배포 관리 체크리스트 리뷰'],
 };
 
-function SectionWorkspace({ title, agentName, items, agent, onSelectMenu }: { title: string; agentName: string; items: WorkspaceItem[]; agent: WorkspaceAgent; onSelectMenu: (menu: string) => void }) {
-  const riskCls = agent.riskLevel === 'CRITICAL' ? 'bg-red-50 text-red-700' : agent.riskLevel === 'WARN' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700';
+const systemWorkspaceAgent: WorkspaceAgent = {
+  summary: '계정과 프로젝트 구성은 안정적으로 운영 중이며, AI 설정 일부는 점검이 필요한 상태입니다.',
+  riskLevel: 'WARN',
+  recommendations: ['비활성 사용자 권한 재검토', 'AI 모델 상태 점검', '프로젝트 구성 변경 이력 확인'],
+  nextActions: ['계정 관리 화면 확인', 'AI 설정 mock 상태 확인'],
+};
+
+function SectionWorkspace({ title, menuTitle = title, items, onSelectMenu }: { title: string; menuTitle?: string; items: WorkspaceItem[]; onSelectMenu: (menu: string) => void }) {
+  const registryAgent = getAgentMetadata(menuTitle);
   const [modal, setModal] = useState<WorkspaceModal>(null);
   const [taskDraft, setTaskDraft] = useState<WorkspaceTaskDraft>({ title: '', description: '', priority: '보통', sectionType: title });
   const [createdTasks, setCreatedTasks] = useState<WorkspaceTaskDraft[]>([]);
@@ -1460,30 +1476,68 @@ function SectionWorkspace({ title, agentName, items, agent, onSelectMenu }: { ti
     setTaskDraft({ title: '', description: '', priority: '보통', sectionType: title });
     setModal(null);
   };
+  const totalDocs = items.reduce((sum, item) => sum + item.docs, 0);
+  const overview = [
+    ['전체 작업 수', `${items.length + createdTasks.length + 5}건`],
+    ['업로드 문서', `${totalDocs + files.length + folderFiles.length}개`],
+    ['AI 분석 가능 문서', `${Math.max(3, Math.round(totalDocs / 10))}개`],
+    ['최근 수정 시간', '14:32'],
+    ['진행 중 작업', `${items.filter((item) => item.status.includes('진행')).length + createdTasks.length}건`],
+  ];
+  const recentFiles = [...files, ...folderFiles].map((file) => file.webkitRelativePath || file.name).slice(0, 3);
+  const recentWork = recentFiles.length ? recentFiles : ['REQ_SPEC_v2.docx', 'DB_SCHEMA_v1.sql', 'API_LIST.xlsx'];
 
   return (
     <PageShell
       title={title}
       subtitle={`${title} 업무를 Command Center 형태로 확인합니다.`}
-      actions={<span className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-[#64748B]">Workspace</span>}
+      actions={<></>}
+      showAgent={false}
     >
-      <Card className="mb-3 min-h-[20vh] p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            [ClipboardCheck, '신규 작업 생성', () => setModal('task')],
-            [FileText, '파일 업로드', () => setModal('file')],
-            [Database, '폴더 업로드', () => setModal('folder')],
-            [Search, '기존 작업 불러오기', undefined],
-          ].map(([Icon, label, onClick]) => {
-            const ButtonIcon = Icon as typeof ClipboardCheck;
-            return (
-              <button key={label as string} onClick={onClick as (() => void) | undefined} className="flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-[#0b1f44] shadow-sm hover:border-[#0b66e4] hover:text-[#0b66e4]">
-                <ButtonIcon size={15} />
-                {label as string}
-              </button>
-            );
-          })}
-          <span className="ml-auto text-xs font-medium text-[#64748B]">임시 작업 {createdTasks.length}건 · 파일 {files.length}건 · 폴더 파일 {folderFiles.length}건</span>
+      <Card className="mb-3 p-4">
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr_0.8fr]">
+          <div>
+            <h2 className="text-sm font-semibold text-[#0b1f44]">Workspace Overview</h2>
+            <p className="mt-0.5 text-xs text-[#64748B]">프로젝트 진행 현황 요약</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {overview.map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-[11px] font-medium text-[#64748B]">{label}</div>
+                  <div className="mt-0.5 text-sm font-bold text-[#0b1f44]">{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold text-[#334155]">Action</h3>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                [ClipboardCheck, '신규 작업 생성', () => setModal('task')],
+                [FileText, '파일 업로드', () => setModal('file')],
+                [Database, '폴더 업로드', () => setModal('folder')],
+                [Search, '기존 작업 불러오기', undefined],
+              ].map(([Icon, label, onClick]) => {
+                const ButtonIcon = Icon as typeof ClipboardCheck;
+                return (
+                  <button key={label as string} onClick={onClick as (() => void) | undefined} className="flex h-9 items-center gap-2 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-semibold text-[#0b1f44] shadow-sm hover:border-[#0b66e4] hover:text-[#0b66e4]">
+                    <ButtonIcon size={14} />
+                    {label as string}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-2 text-[11px] font-medium text-[#64748B]">임시 작업 {createdTasks.length}건 · 파일 {files.length}건 · 폴더 파일 {folderFiles.length}건</div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-semibold text-[#334155]">최근 작업 목록</h3>
+            <div className="mt-2 space-y-2">
+              {recentWork.map((item) => (
+                <div key={item} className="truncate rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-[#64748B]">{item}</div>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -1514,22 +1568,9 @@ function SectionWorkspace({ title, agentName, items, agent, onSelectMenu }: { ti
           </div>
         </Card>
 
-        <Card className="col-span-12 p-4 lg:col-span-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{agentName}</h2>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${riskCls}`}>{agent.riskLevel}</span>
-          </div>
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-[#334155]">{agent.summary}</div>
-          <div className="mt-3 text-xs font-semibold text-[#334155]">recommendations</div>
-          <div className="mt-2 space-y-2">
-            {agent.recommendations.map((item) => <div key={item} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-[#64748B]">{item}</div>)}
-          </div>
-          <div className="mt-3 text-xs font-semibold text-[#334155]">nextActions</div>
-          <div className="mt-2 space-y-2">
-            {agent.nextActions.map((item) => <div key={item} className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-medium text-[#0b66e4]">{item}</div>)}
-          </div>
-          <button className="mt-4 h-9 w-full rounded-md bg-[#0b66e4] text-xs font-semibold text-white">AI 분석 실행</button>
-        </Card>
+        <div className="col-span-12 lg:col-span-4">
+          {registryAgent && <AgentCard agent={registryAgent} />}
+        </div>
       </div>
 
       {modal && (
@@ -1622,9 +1663,10 @@ function WorkspaceActionModal({ modal, taskDraft, setTaskDraft, files, onFiles, 
 }
 
 function WorkScreen({ title, onSelectMenu }: { title: string; onSelectMenu: (menu: string) => void }) {
-  if (title === '1. 분석 · 설계') return <SectionWorkspace title="분석 · 설계" agentName="Analysis Agent" items={analysisWorkspaceItems} agent={analysisWorkspaceAgent} onSelectMenu={onSelectMenu} />;
-  if (title === '2. 개발 · 테스트') return <SectionWorkspace title="개발 · 테스트" agentName="Development Agent" items={developmentWorkspaceItems} agent={developmentWorkspaceAgent} onSelectMenu={onSelectMenu} />;
-  if (title === '3. 검증 · 산출') return <SectionWorkspace title="검증 · 산출" agentName="Validation Agent" items={validationWorkspaceItems} agent={validationWorkspaceAgent} onSelectMenu={onSelectMenu} />;
+  if (title === '1. 분석 · 설계') return <SectionWorkspace title="분석 · 설계" menuTitle={title} items={analysisWorkspaceItems} onSelectMenu={onSelectMenu} />;
+  if (title === '2. 개발 · 테스트') return <SectionWorkspace title="개발 · 테스트" menuTitle={title} items={developmentWorkspaceItems} onSelectMenu={onSelectMenu} />;
+  if (title === '3. 검증 · 산출') return <SectionWorkspace title="검증 · 산출" menuTitle={title} items={validationWorkspaceItems} onSelectMenu={onSelectMenu} />;
+  if (title === '시스템 관리') return <SectionWorkspace title="시스템 관리" items={systemWorkspaceItems} onSelectMenu={onSelectMenu} />;
   if (title === '요구사항 관리') return <RequirementsPage title={title} />;
   if (title === '일정 관리') return <SchedulePage title={title} />;
   if (title === 'WBS 관리') return <WbsPage title={title} />;
@@ -1650,16 +1692,21 @@ function WorkScreen({ title, onSelectMenu }: { title: string; onSelectMenu: (men
   return <Placeholder title={title} />;
 }
 
-function PageShell({ title, subtitle, actions, children }: { title: string; subtitle: string; actions?: React.ReactNode; children: React.ReactNode }) {
+function PageShell({ title, subtitle, actions, children, showAgent = true }: { title: string; subtitle: string; actions?: React.ReactNode; children: React.ReactNode; showAgent?: boolean }) {
+  const agent = getAgentMetadata(title);
+  const breadcrumb = getBreadcrumb(title);
+
   return (
     <main className="min-h-0 flex-1 overflow-y-auto p-3">
       <div className="mb-2.5 flex items-end justify-between">
         <div>
+          <div className="mb-1 text-[11px] font-semibold text-[#64748B]">{breadcrumb.join(' > ')}</div>
           <h1 className="text-xl font-semibold text-[#0b1f44]">{title}</h1>
           <p className="mt-0.5 text-[12px] text-[#64748B]">{subtitle}</p>
         </div>
         {actions ?? <button className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#0b1f44] shadow-sm">엑셀 다운로드</button>}
       </div>
+      {showAgent && agent && <div className="mb-3"><AgentCard agent={agent} /></div>}
       {children}
     </main>
   );
