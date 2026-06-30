@@ -39,13 +39,13 @@ export const agentRegistry: Record<string, AgentMetadata> = {
     description: '개발 진행, 형상/소스 변경, 테스트 준비 상태를 함께 확인합니다.',
     examplePrompts: ['개발 병목 요약', '테스트 준비 부족 항목 찾기', '리뷰 우선순위 추천'],
   },
-  '3. 검증 · 산출': {
-    agentName: 'QA Delivery Agent',
+  '3. 검증 · 품질': {
+    agentName: 'Quality Verification Agent',
     level: 'group',
-    role: '검증 · 산출 본부 Agent',
+    role: '검증 · 품질 본부 Agent',
     status: 'Mock',
-    description: '품질, 결함, 문서, 산출물, 배포 상태를 배포 가능성 관점에서 봅니다.',
-    examplePrompts: ['배포 전 리스크 요약', 'Critical 결함 영향 분석', '산출물 승인 상태 확인'],
+    description: 'Development 소스의 코드 품질, 결함, 문서와 최종 산출물 상태를 통합 검증합니다.',
+    examplePrompts: ['품질 게이트 요약', 'Critical 결함 영향 분석', '문서와 산출물 누락 확인'],
   },
   '시스템 관리': {
     agentName: 'System Control Agent',
@@ -167,8 +167,8 @@ export const agentRegistry: Record<string, AgentMetadata> = {
     description: '빌드, 테스트, 승인, 릴리즈 노트 준비 상태를 확인합니다.',
     examplePrompts: ['배포 준비 누락 확인', '승인 대기 항목 정리', '릴리즈 체크리스트 요약'],
   },
-  '품질 검증': {
-    agentName: 'Quality Agent',
+  '코드 품질 검증': {
+    agentName: 'Code Quality Agent',
     level: 'section',
     role: '품질 기준 충족 여부를 분석합니다.',
     status: 'Mock',
