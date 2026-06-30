@@ -1,6 +1,6 @@
-﻿import sqlite3
+import sqlite3
 
-from backend.app.core import auth
+from app.core import auth
 
 
 def seed(db: sqlite3.Connection) -> None:

@@ -1,11 +1,11 @@
-﻿from contextlib import closing
+from contextlib import closing
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.api import routes
-from backend.app.db import database
-from backend.app.db.seed import seed
+from app.api import routes
+from app.common import database
+from app.db.seed import seed
 
 app = FastAPI(title="ProFlow API")
 
