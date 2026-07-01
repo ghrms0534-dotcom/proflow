@@ -10,6 +10,7 @@ DevelopmentAgentName = Literal[
     "code_review",
     "deployment_ready",
 ]
+AgentName = Literal["project_control", "development", "source_control", "unit_test", "integration_test", "code_review", "deployment_ready"]
 
 
 class AgentRunRequest(BaseModel):
@@ -31,8 +32,9 @@ class AgentRunResponse(BaseModel):
 
 
 class AgentChatRequest(BaseModel):
-    agent: DevelopmentAgentName = "development"
-    message: str
+    agent: AgentName = "development"
+    message: str = Field(min_length=1)
+    project_id: int | None = Field(default=None, gt=0)
     context: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -43,3 +45,8 @@ class AgentChatResponse(BaseModel):
     result: str
     context: dict[str, Any]
     mock: bool
+    provider: str
+    model: str
+    fallback: bool
+    analysis: dict[str, Any] | None = None
+    run_id: int | None = None
