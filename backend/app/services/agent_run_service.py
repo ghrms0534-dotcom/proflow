@@ -9,9 +9,11 @@ from app.agents.development_execution.source_control_agent import SourceControlA
 from app.agents.development_execution.unit_test_agent import UnitTestAgent
 from app.agents.project_control.project_control_agent import ProjectControlAgent
 from app.common import database
+from app.common.config import OLLAMA_MODEL
 from app.common.exceptions import AgentNotFoundError, ProjectAccessError
 from app.schemas.agent import AgentChatRequest, AgentChatResponse, AgentRunRequest, AgentRunResponse
 from app.services.llm_service import generate
+from app.services.agent_definition_service import get_agent
 
 DEVELOPMENT_AGENTS = {
     "development": DevelopmentAgent,
@@ -64,6 +66,22 @@ def chat(payload: AgentChatRequest, user_id: int | None = None) -> AgentChatResp
             analysis=analysis,
         )
         return _save_run(payload, response, payload.project_id)
+
+    definition = get_agent(payload.agent)
+    if definition:
+        response = AgentChatResponse(
+            agent=definition["agent_name"],
+            description=definition["description"],
+            message=payload.message,
+            result=f"{definition['agent_name']}는 현재 {definition['status']} 상태입니다. {definition['description']}",
+            context=payload.context,
+            mock=True,
+            provider="mock",
+            model=OLLAMA_MODEL,
+            fallback=False,
+            analysis={"agent_key": definition["agent_key"], "section_key": definition["section_key"], "status": definition["status"]},
+        )
+        return _save_run(payload, response, None)
 
     agent_type = DEVELOPMENT_AGENTS.get(payload.agent)
     if not agent_type:

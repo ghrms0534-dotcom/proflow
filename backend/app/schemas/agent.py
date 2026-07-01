@@ -10,9 +10,6 @@ DevelopmentAgentName = Literal[
     "code_review",
     "deployment_ready",
 ]
-AgentName = Literal["project_control", "development", "source_control", "unit_test", "integration_test", "code_review", "deployment_ready"]
-
-
 class AgentRunRequest(BaseModel):
     agent: DevelopmentAgentName = "development"
     action: str = "analyze"
@@ -32,7 +29,7 @@ class AgentRunResponse(BaseModel):
 
 
 class AgentChatRequest(BaseModel):
-    agent: AgentName = "development"
+    agent: str = Field(default="development", min_length=2, max_length=64, pattern=r"^[a-z0-9_]+$")
     message: str = Field(min_length=1)
     project_id: int | None = Field(default=None, gt=0)
     context: dict[str, Any] = Field(default_factory=dict)
@@ -50,3 +47,16 @@ class AgentChatResponse(BaseModel):
     fallback: bool
     analysis: dict[str, Any] | None = None
     run_id: int | None = None
+
+
+class AgentDefinitionResponse(BaseModel):
+    id: int
+    agent_key: str
+    agent_name: str
+    section_key: str
+    section_name: str
+    description: str
+    status: str
+    sort_order: int
+    enabled: bool
+    created_at: str

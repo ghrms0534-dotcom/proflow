@@ -89,6 +89,24 @@ class AgentRunServiceTest(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200, response.text)
 
+    def test_agent_catalog_and_sdlc_seed_are_stable(self):
+        with closing(database.connect()) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_definitions").fetchone()[0], 25)
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_definitions WHERE status = 'active'").fetchone()[0], 1)
+            self.assertGreater(db.execute("SELECT COUNT(*) FROM requirements WHERE project_id = 1").fetchone()[0], 0)
+            self.assertGreater(db.execute("SELECT COUNT(*) FROM development_tasks WHERE project_id = 1").fetchone()[0], 0)
+            self.assertGreater(db.execute("SELECT COUNT(*) FROM quality_results WHERE project_id = 1").fetchone()[0], 0)
+
+        with TestClient(app) as client:
+            catalog = client.get("/api/agents")
+            self.assertEqual(catalog.status_code, 200, catalog.text)
+            self.assertEqual(len(catalog.json()["agents"]), 25)
+            detail = client.get("/api/agents/requirement")
+            self.assertEqual(detail.status_code, 200, detail.text)
+            skeleton = client.post("/api/agent/chat", json={"agent": "requirement", "message": "상태 확인"})
+            self.assertEqual(skeleton.status_code, 200, skeleton.text)
+            self.assertEqual(skeleton.json()["analysis"]["status"], "skeleton")
+
 
 if __name__ == "__main__":
     unittest.main()

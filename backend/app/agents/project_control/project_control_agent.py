@@ -33,6 +33,9 @@ class ProjectControlAgent(MockAgent):
                 "SELECT agent_name, provider, mock, fallback, created_at FROM agent_runs WHERE project_id = ? ORDER BY id DESC LIMIT 10",
                 (project_id,),
             ).fetchall()
+            definitions = db.execute(
+                "SELECT agent_key, agent_name, section_key, section_name, description, status, sort_order FROM agent_definitions WHERE enabled = 1 ORDER BY sort_order, id"
+            ).fetchall()
             requirements = self._table_summary(db, "requirements", project_id)
             development = self._table_summary(db, "development_tasks", project_id)
             quality = self._table_summary(db, "quality_results", project_id)
@@ -42,8 +45,10 @@ class ProjectControlAgent(MockAgent):
             "requirements": requirements,
             "development_tasks": development,
             "quality_results": quality,
+            "activity_logs": [dict(row) for row in activities],
             "recent_activities": [dict(row) for row in activities],
             "agent_runs": [dict(row) for row in runs],
+            "agent_definitions": [dict(row) for row in definitions],
         }
 
     def run(self, message: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -63,7 +68,7 @@ class ProjectControlAgent(MockAgent):
         sections = {
             "Planning Analysis Agent": self._section_status(requirements),
             "Development Execution Agent": self._section_status(development),
-            "Delivery Quality Agent": self._section_status(quality),
+            "Delivery Agent": self._section_status(quality),
             "System Control Agent": {"status": "운영중", "total": len(context["recent_activities"])},
         }
         return {

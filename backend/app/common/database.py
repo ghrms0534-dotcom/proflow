@@ -56,6 +56,51 @@ def init_db() -> None:
                 type TEXT NOT NULL DEFAULT 'System',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS requirements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                requirement_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, requirement_key)
+            );
+            CREATE TABLE IF NOT EXISTS development_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                task_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, task_key)
+            );
+            CREATE TABLE IF NOT EXISTS quality_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                result_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                score INTEGER NOT NULL DEFAULT 0,
+                risk_level TEXT NOT NULL DEFAULT 'WARN',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, result_key)
+            );
+            CREATE TABLE IF NOT EXISTS agent_definitions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                agent_key TEXT NOT NULL UNIQUE,
+                agent_name TEXT NOT NULL,
+                section_key TEXT NOT NULL,
+                section_name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'skeleton',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             CREATE TABLE IF NOT EXISTS agent_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER REFERENCES projects(id),

@@ -7,9 +7,11 @@ from app.common import database
 from app.common.exceptions import AgentNotFoundError, ProjectAccessError
 from app.core import auth
 from app.schemas.agent import AgentChatRequest, AgentChatResponse
+from app.services.agent_definition_service import get_agent, list_agents
 from app.services.agent_run_service import chat
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
+catalog_router = APIRouter(prefix="/agents", tags=["Agent"])
 optional_oauth2 = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
@@ -20,6 +22,19 @@ def optional_user_id(token: str | None = Depends(optional_oauth2)) -> int | None
     with closing(database.connect()) as db:
         user = db.execute("SELECT id FROM users WHERE id = ?", (payload["sub"],)).fetchone()
         return user["id"] if user else None
+
+
+@catalog_router.get("")
+def agents():
+    return {"agents": list_agents()}
+
+
+@catalog_router.get("/{agent_key}")
+def agent_detail(agent_key: str):
+    agent = get_agent(agent_key)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {"agent": agent}
 
 
 @router.post("/chat", response_model=AgentChatResponse)
