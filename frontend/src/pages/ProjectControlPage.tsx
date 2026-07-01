@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Bell, BookOpen, Bot, Box, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardCheck, Code2, Database, FileCode2, FileText, HelpCircle, Home, LayoutDashboard, Menu, MessageSquare, PackageCheck, Search, Send, Settings, ShieldCheck, Sparkles, Star, TestTube2, UserCircle } from 'lucide-react';
 import { DashboardAgent } from '../agents/dashboard/dashboardAgent';
-import { getAgentMetadata } from '../agents/agentRegistry';
-import { AgentCard } from '../components/AgentCard';
 import type { DashboardAnalysisMode } from '../agents/dashboard/dashboardAgent.types';
-import type { DashboardData, DashboardLoadState } from '../types/dashboard';
+import type { AiRecommendation, DashboardData, DashboardLoadState } from '../types/dashboard';
 import type { SectionAgentState } from '../types/agentWorkspace';
-import { Card, InfoRow, Priority, PriorityLevelBadge, ProgressRing, ReleaseCheckBadge, SectionHeader, StageProgress, StatusBadge } from './SectionUi';
+import { Card, InfoRow, Priority, ProgressRing, ReleaseCheckBadge, SectionHeader, StageProgress, StatusBadge } from './SectionUi';
 const dashboardActivityIcons = {
   flask: TestTube2,
   clipboard: ClipboardCheck,
@@ -31,17 +29,31 @@ const aiFeatures = [
   { icon: AlertTriangle, title: '결함 원인 분석', desc: '결함의 원인과 조치 방안 분석', color: 'text-red-600 bg-red-50' },
 ];
 
+const sectionLabels: Record<string, string> = {
+  'Planning Analysis Agent': '분석 · 설계 현황',
+  'Development Execution Agent': '개발 · 테스트 현황',
+  'Quality Verification Agent': '검증 · 산출 현황',
+  'System Control Agent': '시스템 운영 현황',
+};
+
+const statusLabels: Record<string, string> = { CRITICAL: '위험', SAFE: '정상', WARN: '점검 필요', WARNING: '점검 필요', ACTIVE: '운영중', Active: '운영중', PENDING: '대기중', Pending: '대기중', 'In Progress': '진행중', Done: '완료', Waiting: '대기중' };
+const koreanStatus = (value: string) => statusLabels[value] ?? value;
+const priorityLabels = { HIGH: '높음', MEDIUM: '보통', LOW: '낮음' };
+const stageLabels: Record<string, string> = { 'Analysis and Design': '분석 · 설계', 'Development and Test': '개발 · 테스트', 'Validation and Delivery': '검증 · 산출' };
+const koreanStage = (value: string) => stageLabels[value] ?? value;
+const analysisModeLabels: Record<DashboardAnalysisMode, string> = { overview: '전체 현황', progress: '진행률', stageProgress: '단계별 진행률', taskStatus: '작업 상태', recentActivity: '최근 업무 처리 내역', recommendation: '추천 분석' };
+
 export function ProjectControlPage({ data, loadState, error, sectionAgents, onSelectSection }: { data: DashboardData | null; loadState: DashboardLoadState; error: string | null; sectionAgents: SectionAgentState[]; onSelectSection: (menu: string) => void }) {
   const [detail, setDetail] = useState<'overall' | 'stages' | 'tasks' | 'activities' | 'recommendations' | null>(null);
   const [recommendationIndex, setRecommendationIndex] = useState(0);
   const [recommendationListMode, setRecommendationListMode] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  if (!data) return <main className="flex flex-1 items-center justify-center text-sm text-slate-500">{loadState === 'loading' ? 'Loading...' : '대시보드 mock 데이터를 준비 중입니다.'}</main>;
+  if (!data) return <main className="flex flex-1 items-center justify-center text-sm text-slate-500">{loadState === 'loading' ? '불러오는 중...' : '대시보드 임시 데이터를 준비 중입니다.'}</main>;
 
   const stageStats = [
-    { title: `1. ${data.stages[0]?.name ?? '분석 · 설계'}`, progress: data.stages[0]?.progress ?? 72, completed: data.stages[0]?.completed ?? 28, progressCount: data.stages[0]?.inProgress ?? 7, waiting: data.stages[0]?.waiting ?? 4, color: 'bg-[#0b66e4]', text: 'text-[#0b66e4]' },
-    { title: `2. ${data.stages[1]?.name ?? '개발 · 테스트'}`, progress: data.stages[1]?.progress ?? 41, completed: data.stages[1]?.completed ?? 32, progressCount: data.stages[1]?.inProgress ?? 14, waiting: data.stages[1]?.waiting ?? 32, color: 'bg-emerald-500', text: 'text-emerald-600' },
-    { title: `3. ${data.stages[2]?.name ?? '검증 · 산출'}`, progress: data.stages[2]?.progress ?? 12, completed: data.stages[2]?.completed ?? 6, progressCount: data.stages[2]?.inProgress ?? 6, waiting: data.stages[2]?.waiting ?? 39, color: 'bg-orange-500', text: 'text-orange-600' },
+    { title: `1. ${koreanStage(data.stages[0]?.name ?? '분석 · 설계')}`, progress: data.stages[0]?.progress ?? 72, completed: data.stages[0]?.completed ?? 28, progressCount: data.stages[0]?.inProgress ?? 7, waiting: data.stages[0]?.waiting ?? 4, color: 'bg-[#0b66e4]', text: 'text-[#0b66e4]' },
+    { title: `2. ${koreanStage(data.stages[1]?.name ?? '개발 · 테스트')}`, progress: data.stages[1]?.progress ?? 41, completed: data.stages[1]?.completed ?? 32, progressCount: data.stages[1]?.inProgress ?? 14, waiting: data.stages[1]?.waiting ?? 32, color: 'bg-emerald-500', text: 'text-emerald-600' },
+    { title: `3. ${koreanStage(data.stages[2]?.name ?? '검증 · 산출')}`, progress: data.stages[2]?.progress ?? 12, completed: data.stages[2]?.completed ?? 6, progressCount: data.stages[2]?.inProgress ?? 6, waiting: data.stages[2]?.waiting ?? 39, color: 'bg-orange-500', text: 'text-orange-600' },
   ];
   const bottleneck = sectionAgents.reduce((lowest, agent) => agent.progress < lowest.progress ? agent : lowest);
   const projectRisk = sectionAgents.some((agent) => agent.riskLevel === 'CRITICAL') ? 'CRITICAL' : sectionAgents.some((agent) => agent.riskLevel === 'WARN') ? 'WARN' : 'SAFE';
@@ -50,14 +62,14 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
 
   return (
     <main className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="min-w-0 flex-1 overflow-y-auto px-3 py-2.5">
-        <div className="mb-2.5 flex items-start justify-between">
+      <div className="min-w-0 flex-1 overflow-y-auto px-3 py-2">
+        <div className="mb-2 flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-[#0b1f44]">통합 대시보드</h1>
-            <p className="mt-0.5 text-[12px] text-[#64748B]">프로젝트의 전체 진행 현황과 AI 추천 인사이트를 확인할 수 있습니다.</p>
+            <h1 className="text-xl font-semibold text-[#0b1f44]">통합 프로젝트 현황</h1>
+            <p className="mt-0.5 text-[12px] text-[#64748B]">프로젝트의 전체 진행 상태와 주요 업무 현황을 확인합니다.</p>
           </div>
           <button onClick={() => setAiOpen(true)} className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#0b1f44] shadow-sm">
-            <Sparkles size={16} /> AI 열기
+            <Sparkles size={16} /> AI 업무지원 열기
           </button>
         </div>
         {error && (
@@ -66,38 +78,38 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
           </div>
         )}
 
-        <Card className="mb-3.5 p-3.5">
+        <Card className="mb-3 p-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-[#0b1f44]">Project Control Agent</h2>
-              <p className="mt-0.5 text-xs text-[#64748B]">4개 Section Agent 통합 관제</p>
+              <h2 className="text-sm font-semibold text-[#0b1f44]">프로젝트 운영 대시보드</h2>
+              <p className="mt-0.5 text-xs text-[#64748B]">전체 업무 영역 진행 상태 요약</p>
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${projectRisk === 'CRITICAL' ? 'bg-red-50 text-red-700' : projectRisk === 'WARN' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700'}`}>{projectRisk}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${projectRisk === 'CRITICAL' ? 'bg-red-50 text-red-700' : projectRisk === 'WARN' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700'}`}>{koreanStatus(projectRisk)}</span>
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-2.5 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {sectionAgents.map((agent) => {
               const riskCls = agent.riskLevel === 'CRITICAL' ? 'bg-red-50 text-red-700' : agent.riskLevel === 'WARN' ? 'bg-orange-50 text-orange-700' : 'bg-emerald-50 text-emerald-700';
               return (
-                <button key={agent.agentName} onClick={() => onSelectSection(agent.menu)} className="rounded-lg border border-slate-200 bg-white p-3 text-left shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:border-[#0b66e4]">
-                  <div className="flex items-start justify-between gap-2"><div className="text-xs font-semibold text-[#0b1f44]">{agent.agentName}</div><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${riskCls}`}>{agent.riskLevel}</span></div>
-                  <div className="mt-3 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-[#0b66e4]" style={{ width: `${agent.progress}%` }} /></div>
-                  <div className="mt-2 grid grid-cols-2 gap-y-1 text-[11px] text-[#64748B]"><span>진행률</span><b className="text-right text-[#0b1f44]">{agent.progress}%</b><span>상태</span><b className="text-right text-[#0b1f44]">{agent.status}</b><span>최근 작업</span><b className="text-right text-[#0b1f44]">{agent.recentTasks}건</b></div>
+                <button key={agent.agentName} onClick={() => onSelectSection(agent.menu)} className="rounded-lg border border-slate-200 bg-white p-2.5 text-left shadow-[0_2px_8px_rgba(15,23,42,0.04)] hover:border-[#0b66e4]">
+                  <div className="flex items-start justify-between gap-2"><div className="text-xs font-semibold text-[#0b1f44]">{sectionLabels[agent.agentName] ?? agent.section}</div><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${riskCls}`}>{koreanStatus(agent.riskLevel)}</span></div>
+                  <div className="mt-2.5 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-[#0b66e4]" style={{ width: `${agent.progress}%` }} /></div>
+                  <div className="mt-2 grid grid-cols-2 gap-y-1 text-[11px] text-[#64748B]"><span>진행률</span><b className="text-right text-[#0b1f44]">{agent.progress}%</b><span>상태</span><b className="text-right text-[#0b1f44]">{koreanStatus(agent.status)}</b><span>최근 작업</span><b className="text-right text-[#0b1f44]">{agent.recentTasks}건</b></div>
                 </button>
               );
             })}
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-2.5 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {[
               ['현재 프로젝트 상태 요약', `4개 Section 평균 진행률 ${averageProgress}%, 최근 작업 ${recentTaskCount}건입니다.`],
-              ['병목 구간', `${bottleneck.agentName} (${bottleneck.progress}%)`],
-              ['위험도', projectRisk],
+              ['병목 구간', `${sectionLabels[bottleneck.agentName] ?? bottleneck.section} (${bottleneck.progress}%)`],
+              ['위험도', koreanStatus(projectRisk)],
               ['권장 조치', `${bottleneck.section} 미완료 작업을 우선 검토하세요.`],
             ].map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><div className="text-[11px] font-semibold text-[#64748B]">{label}</div><div className="mt-1 text-xs font-medium leading-5 text-[#0b1f44]">{value}</div></div>)}
           </div>
         </Card>
 
-        <div className="grid grid-cols-12 gap-3.5">
-          <Card onClick={() => setDetail('overall')} className="col-span-12 h-[172px] p-2.5 lg:col-span-4">
+        <div className="grid grid-cols-12 gap-3">
+          <Card onClick={() => setDetail('overall')} className="col-span-12 h-[160px] p-2.5 lg:col-span-4">
             <h2 className="text-[12px] font-semibold">전체 진행률</h2>
             <div className="mt-3 flex items-center gap-4">
               <ProgressRing value={data.summary.progress} />
@@ -110,14 +122,14 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
             </div>
           </Card>
 
-          <Card onClick={() => setDetail('stages')} className="col-span-12 h-[172px] p-2.5 lg:col-span-5">
+          <Card onClick={() => setDetail('stages')} className="col-span-12 h-[160px] p-2.5 lg:col-span-5">
             <h2 className="text-[12px] font-semibold">단계별 진행률</h2>
             <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200">
               {stageStats.map((stage) => <StageProgress key={stage.title} stage={stage} />)}
             </div>
           </Card>
 
-          <Card className="col-span-12 h-[172px] p-2.5 lg:col-span-3">
+          <Card className="col-span-12 h-[160px] p-2.5 lg:col-span-3">
             <h2 className="text-[12px] font-semibold">프로젝트 정보</h2>
             <div className="mt-4 space-y-2.5 text-sm">
               <InfoRow label="프로젝트명" value={data.projectInfo.name} />
@@ -153,7 +165,7 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
                     <td className="w-24 px-2.5 py-1.5">{task.stage}</td>
                     <td className="w-20 whitespace-nowrap px-2.5 py-1.5">{task.assignee}</td>
                     <td className="w-20 whitespace-nowrap px-2.5 py-1.5">{task.due}</td>
-                    <td className="w-20 whitespace-nowrap px-2.5 py-1.5"><StatusBadge value={task.status} /></td>
+                    <td className="w-20 whitespace-nowrap px-2.5 py-1.5"><StatusBadge value={koreanStatus(task.status)} /></td>
                     <td className="w-20 whitespace-nowrap px-2.5 py-1.5"><Priority value={task.priority} /></td>
                   </tr>
                 ))}
@@ -163,7 +175,7 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
           </Card>
 
           <Card onClick={() => setDetail('activities')} className="col-span-12 lg:col-span-5">
-            <SectionHeader title="최근 활동" />
+            <SectionHeader title="최근 업무 처리 내역" />
             <div className="divide-y divide-slate-100 px-3">
               {data.recentActivities.slice(0, 3).map((activity) => {
                 const Icon = dashboardActivityIcons[activity.icon];
@@ -182,34 +194,10 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
             <div className="px-3 pb-3 text-right text-sm font-medium text-emerald-700">전체보기 &gt;</div>
           </Card>
 
-          <Card onClick={() => { setRecommendationIndex(0); setRecommendationListMode(true); setDetail('recommendations'); }} className="col-span-12 p-3">
-            <h2 className="mb-2.5 text-sm font-semibold">AI 추천 결과</h2>
-            <div className="grid gap-2.5 xl:grid-cols-5">
-              {data.aiRecommendations.map((item, index) => {
-                const Icon = dashboardRecommendationIcons[item.icon];
-                return (
-                  <div key={item.id} onClick={(event) => { event.stopPropagation(); setRecommendationIndex(index); setRecommendationListMode(false); setDetail('recommendations'); }} className={`group cursor-pointer rounded-lg border bg-white p-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)] transition duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.08)] ${index === 0 ? 'border-orange-200 border-l-4 border-l-orange-500 bg-orange-50/30' : 'border-slate-200 border-l-4 border-l-slate-200 hover:border-l-orange-400'}`}>
-                    <div className="flex items-start gap-2.5">
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.color} text-white`}><Icon size={16} /></div>
-                      <div>
-                        <div className="flex items-center gap-2 text-sm font-semibold text-[#0b1f44]">
-                          {item.title}
-                          <PriorityLevelBadge value={item.priority} />
-                        </div>
-                        <p className="mt-1 min-h-[34px] text-xs leading-5 text-[#64748B]">{item.desc}</p>
-                      </div>
-                    </div>
-                    <button className="mt-2.5 h-8 w-full rounded-md border border-slate-300 text-sm font-medium text-[#0b1f44] hover:border-[#0b66e4] hover:text-[#0b66e4]">{item.action}</button>
-                  </div>
-                );
-              })}
-            </div>
-            <button onClick={(event) => { event.stopPropagation(); setRecommendationIndex(0); setRecommendationListMode(true); setDetail('recommendations'); }} className="block w-full pt-2.5 text-right text-sm font-medium text-emerald-700">전체 추천 보기 &gt;</button>
-          </Card>
         </div>
       </div>
 
-      <AiPanel open={aiOpen} onToggle={() => setAiOpen((open) => !open)} />
+      <AiPanel open={aiOpen} onToggle={() => setAiOpen((open) => !open)} recommendations={data.aiRecommendations} onRecommendation={(index) => { setRecommendationIndex(index); setRecommendationListMode(false); setDetail('recommendations'); }} />
       {detail && <DashboardDetailDialog type={detail} data={data} stageStats={stageStats} recommendationIndex={recommendationIndex} recommendationListMode={recommendationListMode} onRecommendationChange={setRecommendationIndex} onClose={() => setDetail(null)} />}
     </main>
   );
@@ -237,13 +225,13 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
     overall: { title: '전체 진행률 상세' },
     stages: { title: '단계별 진행률 상세' },
     tasks: { title: '주요 작업 현황 상세' },
-    activities: { title: '최근 활동 상세' },
+    activities: { title: '최근 업무 처리 내역 상세' },
     recommendations: { title: selectedRecommendation.title },
   }[type];
 
   const history = type === 'recommendations'
     ? agentResult.popupInsights
-    : ['대시보드 상세 조회', `DashboardAgent ${agentResult.riskLevel} 분석 생성`, `이전 대비 ${agentResult.memoryDiff}`];
+    : ['대시보드 상세 조회', `프로젝트 현황 ${koreanStatus(agentResult.riskLevel)} 분석 생성`, `이전 대비 ${agentResult.memoryDiff}`];
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -251,7 +239,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-[#0b1f44]">{meta.title}</h2>
-            <ReleaseCheckBadge value={agentResult?.riskLevel ?? 'WARN'} />
+            <ReleaseCheckBadge value={koreanStatus(agentResult?.riskLevel ?? 'WARN')} />
           </div>
           <button onClick={onClose} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#0b1f44] hover:bg-slate-50">닫기</button>
         </div>
@@ -295,7 +283,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
                       <span className="font-semibold text-[#0b66e4]">활동 {index + 1}</span>
                       <span className="font-medium">{item.title}</span>
                       <span>{item.time}</span>
-                      <span>AI Agent</span>
+                      <span>자동 분석</span>
                     </div>
                   ))}
                 </div>
@@ -303,7 +291,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
                 <div className="divide-y divide-slate-100">
                   {recommendationListMode && data.aiRecommendations.map((item, index) => (
                     <button key={item.id} onClick={() => onRecommendationChange(index)} className={`grid w-full grid-cols-[110px_1fr_1fr_120px] gap-3 px-3 py-2.5 text-left text-xs hover:bg-blue-50/40 ${recommendationIndex === index ? 'bg-blue-50/60' : ''}`}>
-                      <PriorityLevelBadge value={item.priority} />
+                      <span className="font-semibold text-[#64748B]">{priorityLabels[item.priority]}</span>
                       <span className="font-semibold">{item.title}</span>
                       <span className="text-[#64748B]">{item.desc}</span>
                       <span className="rounded-md border border-slate-300 bg-white px-2 py-1 text-center text-[#0b66e4]">{item.actionLabel}</span>
@@ -334,10 +322,10 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
                     {data.tasks.map((task) => (
                       <tr key={task.no} className="hover:bg-blue-50/40">
                         <td className="truncate px-3 py-2 font-medium">{task.name}</td>
-                        <td className="px-3 py-2">{task.stage}</td>
+                        <td className="px-3 py-2">{koreanStage(task.stage)}</td>
                         <td className="px-3 py-2">{task.assignee}</td>
                         <td className="px-3 py-2">{task.due}</td>
-                        <td className="px-3 py-2"><StatusBadge value={task.status} /></td>
+                        <td className="px-3 py-2"><StatusBadge value={koreanStatus(task.status)} /></td>
                         <td className="px-3 py-2"><Priority value={task.priority} /></td>
                       </tr>
                     ))}
@@ -348,11 +336,11 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
 
             <Card className="col-span-12 p-4 lg:col-span-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">DashboardAgent</h3>
+                <h3 className="text-sm font-semibold">프로젝트 현황 분석</h3>
                 <Sparkles size={16} className="text-orange-500" />
               </div>
-              <div className="mt-2 text-[11px] font-medium text-[#64748B]">mode: {analysisMode}</div>
-              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{agentResult?.summary ?? 'DashboardAgent 분석 결과가 없습니다.'}</div>
+              <div className="mt-2 text-[11px] font-medium text-[#64748B]">분석 유형: {analysisModeLabels[analysisMode]}</div>
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#334155]">{agentResult?.summary ?? '프로젝트 현황 분석 결과가 없습니다.'}</div>
               {agentResult?.detectedIssues.length > 0 && (
                 <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-[#334155]">
                   {agentResult.detectedIssues.map((issue) => <div key={issue}>- {issue}</div>)}
@@ -362,7 +350,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
                 추천 조치: {agentResult?.recommendedActions[0] ?? '분석 결과를 확인할 수 없습니다.'}
               </div>
               <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-[#64748B]">
-                riskLevel: {agentResult?.riskLevel ?? 'N/A'}<br />confidence: {agentResult ? Math.round(agentResult.confidence * 100) : 0}%<br />memoryDiff: {agentResult?.memoryDiff ?? 'N/A'}
+                위험도: {koreanStatus(agentResult?.riskLevel ?? 'WARN')}<br />신뢰도: {agentResult ? Math.round(agentResult.confidence * 100) : 0}%<br />상태 변화: {agentResult?.memoryDiff ?? '없음'}
               </div>
               {type === 'recommendations' && (
                 <button className="mt-3 h-9 w-full rounded-md bg-[#0b66e4] px-3 text-xs font-semibold text-white">{selectedRecommendation.targetScreen} 이동</button>
@@ -373,7 +361,7 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
           <Card className="mt-3 p-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">최근 이력 / 추천 조치</h3>
-              <span className="text-xs text-[#64748B]">mock 분석</span>
+              <span className="text-xs text-[#64748B]">모의 분석</span>
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-3">
               {history.map((item) => <div key={item} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-[#334155]">{item}</div>)}
@@ -385,11 +373,11 @@ function DashboardDetailDialog({ type, data, stageStats, recommendationIndex, re
   );
 }
 
-function AiPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+function AiPanel({ open, onToggle, recommendations, onRecommendation }: { open: boolean; onToggle: () => void; recommendations: AiRecommendation[]; onRecommendation: (index: number) => void }) {
   if (!open) {
     return (
       <aside className="flex w-12 shrink-0 items-start justify-center border-l border-slate-200 bg-white pt-3">
-        <button onClick={onToggle} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#0b66e4] hover:bg-blue-50" title="AI 업무 지원 열기">
+        <button onClick={onToggle} className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-[#0b66e4] hover:bg-blue-50" title="AI 업무지원 열기">
           <Sparkles size={17} />
         </button>
       </aside>
@@ -399,7 +387,7 @@ function AiPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <aside className="flex max-h-[85vh] w-[276px] shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white">
       <div className="flex h-12 items-center justify-between border-b border-slate-200 px-3">
-        <div className="flex items-center gap-2 text-base font-semibold text-[#0b66e4]"><Sparkles size={19} /> AI 업무 지원</div>
+        <div className="flex items-center gap-2 text-base font-semibold text-[#0b66e4]"><Sparkles size={19} /> AI 업무지원</div>
         <button onClick={onToggle} className="rounded-md p-1 hover:bg-slate-100"><ChevronRight size={18} /></button>
       </div>
       <div className="grid grid-cols-3 border-b border-slate-200 text-[12px] font-medium text-[#64748B]">
@@ -408,6 +396,14 @@ function AiPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
         <button className="py-2">히스토리</button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        <h3 className="mb-2 text-sm font-semibold">프로젝트 추천</h3>
+        <div className="mb-4 space-y-2">
+          {recommendations.slice(0, 3).map((item, index) => {
+            const Icon = dashboardRecommendationIcons[item.icon];
+            const priority = item.priority === 'HIGH' ? '높음' : item.priority === 'MEDIUM' ? '보통' : '낮음';
+            return <button key={item.id} onClick={() => onRecommendation(index)} className="flex w-full items-start gap-2 rounded-lg border border-slate-200 p-2 text-left hover:border-[#0b66e4] hover:bg-blue-50/40"><div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${item.color} text-white`}><Icon size={14} /></div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2 text-xs font-semibold text-[#0b1f44]"><span className="truncate">{item.title}</span><span className="shrink-0 text-[10px] text-[#64748B]">{priority}</span></div><p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[#64748B]">{item.desc}</p></div></button>;
+          })}
+        </div>
         <h3 className="mb-2 text-sm font-semibold">추천 기능</h3>
         <div className="space-y-2.5">
           {aiFeatures.map((feature) => {

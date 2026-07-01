@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, BookOpen, Bot, Box, BriefcaseBusiness, CalendarDay
 import { Card, GitBranchIcon, PageShell, ReleaseCheckBadge, SectionHeader, StatusBadge } from './SectionUi';
 import { SectionWorkspace, developmentWorkspaceItems } from './SectionWorkspace';
 import type { SectionAgentState, WorkspaceAction } from '../types/agentWorkspace';
+import { RealCrudPage } from './RealCrudPage';
 const releaseEnvironments = [
   {
     env: 'dev',
@@ -324,11 +325,11 @@ function ReleaseReadyPage({ title }: { title: string }) {
 
 export function DevelopmentExecutionPage({ title, sectionAgent, onWorkspaceAction }: { title: string; sectionAgent: SectionAgentState; onWorkspaceAction: (section: string, action: WorkspaceAction, count?: number) => void }) {
   if (title === '2. 개발 · 테스트') return <SectionWorkspace title="개발 · 테스트" items={developmentWorkspaceItems} sectionAgent={sectionAgent} onWorkspaceAction={onWorkspaceAction} />;
-  if (title === '개발 관리') return <AiSoftwareEngineeringWorkspace onArchitecture={() => onWorkspaceAction('개발 · 테스트', 'architecture')} />;
+  if (title === '개발 관리') return <RealCrudPage resource="developmentTasks" />;
   if (title === '형상 관리') return <DevEnvironmentWorkspace />;
   if (title === '소스 관리') return <CodeConversionWorkspace />;
-  if (title === '단위 테스트') return <TestGeneratorWorkspace />;
-  if (title === '통합 테스트') return <ApiFlowTester />;
-  if (title === '코드 리뷰') return <AiReviewWorkspace />;
-  return <ReleaseReadyPage title={title} />;
+  if (title === '단위 테스트') return <RealCrudPage resource="unitTests" />;
+  if (title === '통합 테스트') return <RealCrudPage resource="integrationTests" />;
+  if (title === '코드 리뷰') return <RealCrudPage resource="codeReviews" />;
+  return <RealCrudPage resource="deployments" />;
 }

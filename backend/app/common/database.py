@@ -67,6 +67,61 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(project_id, requirement_key)
             );
+            CREATE TABLE IF NOT EXISTS schedules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                schedule_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, schedule_key)
+            );
+            CREATE TABLE IF NOT EXISTS wbs_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                wbs_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, wbs_key)
+            );
+            CREATE TABLE IF NOT EXISTS ui_designs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                design_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, design_key)
+            );
+            CREATE TABLE IF NOT EXISTS database_designs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                design_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, design_key)
+            );
+            CREATE TABLE IF NOT EXISTS api_designs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                design_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'planned',
+                priority TEXT NOT NULL DEFAULT 'MEDIUM',
+                owner TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(project_id, design_key)
+            );
             CREATE TABLE IF NOT EXISTS development_tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL REFERENCES projects(id),
@@ -78,6 +133,57 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(project_id, task_key)
             );
+            CREATE TABLE IF NOT EXISTS unit_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                target_module TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'planned',
+                pass_count INTEGER NOT NULL DEFAULT 0,
+                fail_count INTEGER NOT NULL DEFAULT 0,
+                coverage INTEGER NOT NULL DEFAULT 0,
+                owner TEXT NOT NULL DEFAULT '',
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS integration_tests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                target_scope TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'planned',
+                scenario_count INTEGER NOT NULL DEFAULT 0,
+                passed_scenarios INTEGER NOT NULL DEFAULT 0,
+                failed_scenarios INTEGER NOT NULL DEFAULT 0,
+                owner TEXT NOT NULL DEFAULT '',
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS code_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                repository TEXT NOT NULL DEFAULT '',
+                branch TEXT NOT NULL DEFAULT '',
+                reviewer TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'planned',
+                issue_count INTEGER NOT NULL DEFAULT 0,
+                resolved_count INTEGER NOT NULL DEFAULT 0,
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS deployments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                environment TEXT NOT NULL DEFAULT '',
+                version TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'planned',
+                deployed_at TEXT,
+                owner TEXT NOT NULL DEFAULT '',
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             CREATE TABLE IF NOT EXISTS quality_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL REFERENCES projects(id),
@@ -88,6 +194,45 @@ def init_db() -> None:
                 risk_level TEXT NOT NULL DEFAULT 'WARN',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(project_id, result_key)
+            );
+            CREATE TABLE IF NOT EXISTS defects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                severity TEXT NOT NULL DEFAULT 'MEDIUM',
+                status TEXT NOT NULL DEFAULT 'open',
+                source TEXT NOT NULL DEFAULT '',
+                owner TEXT NOT NULL DEFAULT '',
+                detected_at TEXT,
+                resolved_at TEXT,
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                document_type TEXT NOT NULL DEFAULT '',
+                version TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'planned',
+                owner TEXT NOT NULL DEFAULT '',
+                file_name TEXT NOT NULL DEFAULT '',
+                file_path TEXT NOT NULL DEFAULT '',
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS outputs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                title TEXT NOT NULL,
+                output_type TEXT NOT NULL DEFAULT '',
+                version TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'planned',
+                owner TEXT NOT NULL DEFAULT '',
+                submitted_at TEXT,
+                approved_at TEXT,
+                memo TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS agent_definitions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

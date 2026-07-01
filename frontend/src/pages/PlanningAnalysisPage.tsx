@@ -3,6 +3,7 @@ import { AlertTriangle, Bell, BookOpen, Bot, Box, BriefcaseBusiness, CalendarDay
 import { Card, DetailBlock, InfoRow, PageShell, Priority, ReviewBadge, SectionHeader, SeverityBadge, StatusBadge, DelayBadge, DeliverableStatusBadge } from './SectionUi';
 import { SectionWorkspace, analysisWorkspaceItems } from './SectionWorkspace';
 import type { SectionAgentState, WorkspaceAction } from '../types/agentWorkspace';
+import { RealCrudPage } from './RealCrudPage';
 const requirementRows = [
   { id: 'REQ-001', area: '회원', title: '사용자 로그인 및 권한 검증', owner: '김영희', priority: '높음', status: '승인', ai: '정상', note: '권한별 메뉴 접근 조건 명확' },
   { id: 'REQ-014', area: '결제', title: '결제 승인/취소 이력 조회', owner: '이철수', priority: '높음', status: '검토중', ai: '누락', note: '취소 사유 코드 정의 필요' },
@@ -1473,11 +1474,11 @@ function DesignDeliverablesPage({ title, autoOutputs, onAgentChange }: { title: 
 
 export function PlanningAnalysisPage({ title, sectionAgent, planningSnapshot, planningReady, planningOutputs, onAgentChange, onWorkspaceAction }: { title: string; sectionAgent: SectionAgentState; planningSnapshot: typeof initialPlanningSnapshot; planningReady: boolean; planningOutputs: typeof deliverableSeedRows; onAgentChange: (change: PlanningChange) => void; onWorkspaceAction: (section: string, action: WorkspaceAction, count?: number) => void }) {
   if (title === '1. 분석 · 설계') return <SectionWorkspace title="분석 · 설계" items={analysisWorkspaceItems} sectionAgent={sectionAgent} planningSnapshot={planningSnapshot} planningReady={planningReady} onWorkspaceAction={onWorkspaceAction} />;
-  if (title === '요구사항 관리') return <RequirementsPage title={title} onAgentChange={onAgentChange} />;
-  if (title === '일정 관리') return <SchedulePage title={title} onAgentChange={onAgentChange} />;
-  if (title === 'WBS 관리') return <WbsPage title={title} onAgentChange={onAgentChange} />;
-  if (title === '화면 설계') return <ScreenDesignPage title={title} onAgentChange={onAgentChange} />;
-  if (title === 'DB 설계') return <DbDesignPage title={title} onAgentChange={onAgentChange} />;
-  if (title === 'API 설계') return <ApiDesignPage title={title} onAgentChange={onAgentChange} />;
+  if (title === '요구사항 관리') return <RealCrudPage resource="requirements" />;
+  if (title === '일정 관리') return <RealCrudPage resource="schedules" />;
+  if (title === 'WBS 관리') return <RealCrudPage resource="wbs" />;
+  if (title === '화면 설계') return <RealCrudPage resource="uiDesigns" />;
+  if (title === 'DB 설계') return <RealCrudPage resource="databaseDesigns" />;
+  if (title === 'API 설계') return <RealCrudPage resource="apiDesigns" />;
   return <DesignDeliverablesPage title={title} autoOutputs={planningOutputs} onAgentChange={onAgentChange} />;
 }

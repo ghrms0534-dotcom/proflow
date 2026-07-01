@@ -86,6 +86,25 @@ def seed(db: sqlite3.Connection) -> None:
         db.execute("INSERT OR IGNORE INTO development_tasks (project_id, task_key, title, status, priority, owner) VALUES (1, 'DEV-001', 'Agent Chat API 구현', 'in_progress', 'HIGH', '이철수')")
         db.execute("INSERT OR IGNORE INTO development_tasks (project_id, task_key, title, status, priority, owner) VALUES (1, 'DEV-002', 'Project Control context 연결', 'done', 'MEDIUM', '최지훈')")
         db.execute("INSERT OR IGNORE INTO quality_results (project_id, result_key, title, status, score, risk_level) VALUES (1, 'QA-001', 'Backend API 품질 검증', 'passed', 86, 'SAFE')")
+        db.execute("INSERT OR IGNORE INTO schedules (project_id, schedule_key, title, status, priority, owner) VALUES (1, 'SCH-001', '분석 설계 기준 일정', 'in_progress', 'HIGH', 'PM')")
+        db.execute("INSERT OR IGNORE INTO wbs_items (project_id, wbs_key, title, status, priority, owner) VALUES (1, 'WBS-001', '핵심 기능 작업 분해', 'approved', 'HIGH', 'PL')")
+        db.execute("INSERT OR IGNORE INTO ui_designs (project_id, design_key, title, status, priority, owner) VALUES (1, 'UI-001', '프로젝트 대시보드 화면 설계', 'in_review', 'MEDIUM', 'UX')")
+        db.execute("INSERT OR IGNORE INTO database_designs (project_id, design_key, title, status, priority, owner) VALUES (1, 'DB-001', '프로젝트 업무 데이터 모델', 'approved', 'HIGH', 'DBA')")
+        db.execute("INSERT OR IGNORE INTO api_designs (project_id, design_key, title, status, priority, owner) VALUES (1, 'API-001', '프로젝트 업무 API 명세', 'in_progress', 'HIGH', 'Backend')")
+        if not db.execute("SELECT 1 FROM unit_tests WHERE project_id = 1 AND title = '인증 모듈 단위 테스트'").fetchone():
+            db.execute("INSERT INTO unit_tests (project_id, title, target_module, status, pass_count, fail_count, coverage, owner) VALUES (1, '인증 모듈 단위 테스트', 'auth', 'completed', 18, 0, 86, 'Backend')")
+        if not db.execute("SELECT 1 FROM integration_tests WHERE project_id = 1 AND title = '로그인 API 통합 테스트'").fetchone():
+            db.execute("INSERT INTO integration_tests (project_id, title, target_scope, status, scenario_count, passed_scenarios, failed_scenarios, owner) VALUES (1, '로그인 API 통합 테스트', 'auth flow', 'in_progress', 8, 6, 2, 'QA')")
+        if not db.execute("SELECT 1 FROM code_reviews WHERE project_id = 1 AND title = 'Project API 코드 리뷰'").fetchone():
+            db.execute("INSERT INTO code_reviews (project_id, title, repository, branch, reviewer, status, issue_count, resolved_count) VALUES (1, 'Project API 코드 리뷰', 'proflow', 'main', 'PL', 'in_review', 4, 2)")
+        if not db.execute("SELECT 1 FROM deployments WHERE project_id = 1 AND title = '개발 환경 배포'").fetchone():
+            db.execute("INSERT INTO deployments (project_id, title, environment, version, status, owner) VALUES (1, '개발 환경 배포', 'development', '0.1.0', 'completed', 'DevOps')")
+        if not db.execute("SELECT 1 FROM defects WHERE project_id = 1 AND title = '로그인 예외 처리 누락'").fetchone():
+            db.execute("INSERT INTO defects (project_id, title, severity, status, source, owner, detected_at) VALUES (1, '로그인 예외 처리 누락', 'HIGH', 'open', 'Code Review', 'Backend', '2026-07-01')")
+        if not db.execute("SELECT 1 FROM documents WHERE project_id = 1 AND title = 'API 명세서'").fetchone():
+            db.execute("INSERT INTO documents (project_id, title, document_type, version, status, owner, file_name, file_path) VALUES (1, 'API 명세서', 'API', '1.0', 'in_review', 'PL', 'api-spec.md', '/docs/api-spec.md')")
+        if not db.execute("SELECT 1 FROM outputs WHERE project_id = 1 AND title = '1차 검증 보고서'").fetchone():
+            db.execute("INSERT INTO outputs (project_id, title, output_type, version, status, owner, submitted_at) VALUES (1, '1차 검증 보고서', 'Verification Report', '1.0', 'submitted', 'QA', '2026-07-01')")
         if not db.execute("SELECT 1 FROM activity_logs WHERE project_id = 1 AND message = 'Project Control Agent context seeded'").fetchone():
             db.execute("INSERT INTO activity_logs (project_id, message, type) VALUES (1, 'Project Control Agent context seeded', 'Agent')")
         if not db.execute("SELECT 1 FROM agent_runs WHERE project_id = 1 AND agent_name = 'Project Control Agent' AND request_json LIKE '%seed%'").fetchone():

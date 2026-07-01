@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, Bell, BookOpen, Bot, Box, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardCheck, Code2, Database, FileCode2, FileText, HelpCircle, Home, LayoutDashboard, Menu, MessageSquare, PackageCheck, Search, Send, Settings, ShieldCheck, Sparkles, Star, TestTube2, UserCircle } from 'lucide-react';
 import { Card, PageShell, StatusBadge } from './SectionUi';
 import type { SectionAgentState, WorkspaceAction } from '../types/agentWorkspace';
+import { RealCrudPage } from './RealCrudPage';
 export const initialQualitySnapshot = { codeQuality: 78, defectRisk: 62, defectCount: 7, securityRisk: 55, documentCompletion: 64, criticalIssues: 3, outputCompleteness: 67, audit: ['Development build #184 검증 시작'] };
 
 type VerificationTarget = { id: string; name: string; module: string; status: string; risk: string; owner: string; scanned: string; complexity: number; duplicate: number; smells: number; defects: number; security: string; docs: number; output: string };
@@ -163,8 +164,8 @@ function QualityDetailWorkspace({ kind, snapshot, onChange }: { kind: QualityKin
 
 export function QualitySectionPage({ title, snapshot, score, ready, development, onChange, sectionAgent, onWorkspaceAction }: { title: string; snapshot: typeof initialQualitySnapshot; score: number; ready: boolean; development: SectionAgentState; onChange: (patch: Partial<typeof initialQualitySnapshot>, message: string) => void; sectionAgent: SectionAgentState; onWorkspaceAction: (section: string, action: WorkspaceAction, count?: number) => void }) {
   if (title === '3. 검증 · 품질') return <QualityVerificationPage snapshot={snapshot} score={score} ready={ready} development={development} onChange={onChange} />;
-  if (title === '코드 품질 검증') return <QualityPracticeWorkspace kind="quality" snapshot={snapshot} onChange={onChange} />;
-  if (title === '결함 관리') return <QualityPracticeWorkspace kind="defect" snapshot={snapshot} onChange={onChange} />;
-  if (title === '문서 관리') return <QualityPracticeWorkspace kind="document" snapshot={snapshot} onChange={onChange} />;
-  return <QualityPracticeWorkspace kind="output" snapshot={snapshot} onChange={onChange} />;
+  if (title === '코드 품질 검증') return <RealCrudPage resource="qualityResults" />;
+  if (title === '결함 관리') return <RealCrudPage resource="defects" />;
+  if (title === '문서 관리') return <RealCrudPage resource="documents" />;
+  return <RealCrudPage resource="outputs" />;
 }

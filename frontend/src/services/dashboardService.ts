@@ -31,11 +31,16 @@ type BackendDashboard = {
     progress: number;
     total_tasks: number;
     completed_tasks: number;
+    in_progress_tasks?: number;
+    waiting_tasks?: number;
     days_left?: number;
     risk_level?: 'SAFE' | 'WARN' | 'CRITICAL';
     client: string;
   };
-  stages?: { name: string; progress: number }[];
+  stages?: { name: string; progress: number; completed?: number; in_progress?: number; waiting?: number }[];
+  major_tasks?: { no: number; name: string; stage: string; owner: string; status: string; due_date: string; priority: string }[];
+  recent_activities?: { message: string; type: string; created_at: string }[];
+  project_info?: { name: string; customer: string; pm: string; period: string; base_date: string };
 };
 
 function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardData {
@@ -49,16 +54,35 @@ function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardDa
       progress: summary?.progress ?? mockDashboard.summary.progress,
       totalTasks: summary?.total_tasks ?? mockDashboard.summary.totalTasks,
       completedTasks: summary?.completed_tasks ?? mockDashboard.summary.completedTasks,
+      inProgressTasks: summary?.in_progress_tasks ?? mockDashboard.summary.inProgressTasks,
+      waitingTasks: summary?.waiting_tasks ?? mockDashboard.summary.waitingTasks,
       riskLevel: summary?.risk_level ?? mockDashboard.summary.riskLevel,
     },
     stages: mockDashboard.stages.map((stage, index) => ({
       ...stage,
       name: toKoreanStage(data.stages?.[index]?.name ?? stage.name),
       progress: data.stages?.[index]?.progress ?? stage.progress,
+      completed: data.stages?.[index]?.completed ?? stage.completed,
+      inProgress: data.stages?.[index]?.in_progress ?? stage.inProgress,
+      waiting: data.stages?.[index]?.waiting ?? stage.waiting,
     })),
-    tasks: mockDashboard.tasks,
+    tasks: data.major_tasks?.map((task) => ({
+      no: task.no, name: task.name, stage: toKoreanStage(task.stage), assignee: task.owner,
+      due: task.due_date, status: task.status, priority: task.priority,
+    })) ?? [],
+    recentActivities: data.recent_activities?.map((activity) => ({
+      icon: activity.type === 'Quality' ? 'alert' : activity.type === 'Development' ? 'fileCode' : 'clipboard',
+      title: activity.message,
+      desc: activity.type,
+      time: activity.created_at.replace('T', ' ').slice(0, 16),
+      color: activity.type === 'Quality' ? '#ef4444' : '#2563eb',
+    })) ?? [],
     projectInfo: {
       ...mockDashboard.projectInfo,
+      ...(data.project_info && {
+        name: data.project_info.name, customer: data.project_info.customer, pm: data.project_info.pm,
+        period: data.project_info.period, baseDate: data.project_info.base_date,
+      }),
       customer: summary?.client ?? mockDashboard.projectInfo.customer,
     },
   };

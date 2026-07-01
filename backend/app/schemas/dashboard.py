@@ -5,6 +5,8 @@ class DashboardSummary(BaseModel):
     progress: int
     total_tasks: int
     completed_tasks: int
+    in_progress_tasks: int
+    waiting_tasks: int
     days_left: int
     risk_level: str
     client: str
@@ -14,6 +16,9 @@ class StageProgress(BaseModel):
     name: str
     progress: int
     status: str
+    completed: int
+    in_progress: int
+    waiting: int
 
 
 class TaskItem(BaseModel):
@@ -22,6 +27,23 @@ class TaskItem(BaseModel):
     owner: str
     status: str
     due_date: str
+    stage: str
+    priority: str
+
+
+class RecentActivity(BaseModel):
+    id: int
+    message: str
+    type: str
+    created_at: str
+
+
+class ProjectInfo(BaseModel):
+    name: str
+    customer: str
+    pm: str
+    period: str
+    base_date: str
 
 
 class AiRecommendation(BaseModel):
@@ -35,3 +57,5 @@ class DashboardResponse(BaseModel):
     stages: list[StageProgress]
     major_tasks: list[TaskItem]
     ai_recommendations: list[AiRecommendation]
+    recent_activities: list[RecentActivity]
+    project_info: ProjectInfo
