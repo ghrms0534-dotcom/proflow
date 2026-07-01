@@ -1,4 +1,3 @@
-import json
 from contextlib import closing
 
 from app.agents.development_execution.code_review_agent import CodeReviewAgent
@@ -51,21 +50,23 @@ def chat(payload: AgentChatRequest, user_id: int | None = None) -> AgentChatResp
         if not user_id:
             raise ProjectAccessError("Authentication is required for Project Control Agent")
         agent = ProjectControlAgent()
-        analysis = agent.run(payload.message, agent.build_context(payload.project_id, user_id))
-        llm = generate(f"[{agent.name}] {payload.message}\nProject context: {json.dumps(analysis, ensure_ascii=False, default=str)}")
+        dashboard_context = agent.build_dashboard_context(payload.project_id, user_id)
+        analysis = agent.run(payload.message, dashboard_context)
+        prompt = agent.build_prompt(payload.message, dashboard_context)
+        llm = generate(prompt)
         response = AgentChatResponse(
             agent=agent.name,
             description=agent.description,
             message=payload.message,
             result=llm.text if llm.provider == "ollama" else agent.render_mock(analysis),
-            context=payload.context,
+            context={**payload.context, "dashboard_context": dashboard_context},
             mock=llm.provider == "mock",
             provider=llm.provider,
             model=llm.model,
             fallback=llm.fallback,
             analysis=analysis,
         )
-        return _save_run(payload, response, payload.project_id)
+        return _save_run(payload, response, payload.project_id, prompt)
 
     definition = get_agent(payload.agent)
     if definition:
@@ -102,14 +103,16 @@ def chat(payload: AgentChatRequest, user_id: int | None = None) -> AgentChatResp
     return _save_run(payload, response, None)
 
 
-def _save_run(payload: AgentChatRequest, response: AgentChatResponse, project_id: int | None) -> AgentChatResponse:
+def _save_run(payload: AgentChatRequest, response: AgentChatResponse, project_id: int | None, input_prompt: str | None = None) -> AgentChatResponse:
+    status = "fallback" if response.fallback else "success"
     with closing(database.connect()) as db:
         cursor = db.execute(
             """
-            INSERT INTO agent_runs (project_id, agent_name, request_json, response_json, provider, model, mock, fallback)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO agent_runs
+            (project_id, agent_name, request_json, response_json, provider, model, mock, fallback, input_prompt, output_result, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (project_id, response.agent, payload.model_dump_json(), response.model_dump_json(), response.provider, response.model, response.mock, response.fallback),
+            (project_id, payload.agent, payload.model_dump_json(), response.model_dump_json(), response.provider, response.model, response.mock, response.fallback, input_prompt or payload.message, response.result, status),
         )
         db.commit()
         response.run_id = cursor.lastrowid

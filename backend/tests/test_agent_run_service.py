@@ -1,3 +1,4 @@
+import json
 import unittest
 from contextlib import closing
 from pathlib import Path
@@ -5,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
-from app.common import database
+from app.common import config, database
 from app.db.seed import seed
 from app.schemas.agent import AgentChatRequest
 from app.services import llm_service
@@ -27,6 +28,10 @@ class AgentRunServiceTest(unittest.TestCase):
     def tearDownClass(cls):
         database.DB_PATH = cls.original_db_path
 
+    def test_invalid_llm_timeout_uses_default(self):
+        with patch.dict("os.environ", {"TEST_LLM_TIMEOUT": "invalid"}):
+            self.assertEqual(config._positive_int("TEST_LLM_TIMEOUT", 60), 60)
+
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_development_agent_returns_mock_response(self):
         result = chat(AgentChatRequest(message="Review auth.py", context={"file": "auth.py"}))
@@ -47,16 +52,38 @@ class AgentRunServiceTest(unittest.TestCase):
     @patch("app.services.llm_service.USE_REAL_LLM", True)
     def test_real_llm_uses_ollama_response(self):
         response = MagicMock()
+        response.status = 200
         response.read.return_value = b'{"response":"ollama result"}'
         context = MagicMock()
         context.__enter__.return_value = response
 
-        with patch("app.services.llm_service.urlopen", return_value=context):
+        with patch("app.services.llm_service.urlopen", return_value=context) as mocked_urlopen:
             result = llm_service.generate("analyze")
 
         self.assertEqual(result.provider, "ollama")
         self.assertEqual(result.text, "ollama result")
         self.assertFalse(result.fallback)
+        request = mocked_urlopen.call_args.args[0]
+        self.assertTrue(request.full_url.endswith("/api/generate"))
+        self.assertEqual(json.loads(request.data)["model"], llm_service.OLLAMA_MODEL)
+        self.assertEqual(mocked_urlopen.call_args.kwargs["timeout"], llm_service.LLM_REQUEST_TIMEOUT)
+
+    def test_ollama_chat_response_format_is_supported(self):
+        self.assertEqual(llm_service._parse_response('{"message":{"content":"chat result"}}'), "chat result")
+
+    @patch("app.services.llm_service.USE_REAL_LLM", True)
+    def test_invalid_ollama_response_logs_reason_and_falls_back(self):
+        response = MagicMock()
+        response.status = 200
+        response.read.return_value = b'{"done":true}'
+        context = MagicMock()
+        context.__enter__.return_value = response
+
+        with self.assertLogs("uvicorn.error", level="ERROR") as logs, patch("app.services.llm_service.urlopen", return_value=context):
+            result = llm_service.generate("analyze")
+
+        self.assertTrue(result.fallback)
+        self.assertIn("invalid response format", " ".join(logs.output))
 
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_project_control_builds_context_and_saves_run(self):
@@ -68,9 +95,35 @@ class AgentRunServiceTest(unittest.TestCase):
 
         self.assertEqual(result.agent, "Project Control Agent")
         self.assertIsNotNone(result.run_id)
-        self.assertIn("section_agents", result.analysis)
+        dashboard = result.context["dashboard_context"]
+        self.assertEqual(dashboard["project_id"], project_id)
+        self.assertGreaterEqual(dashboard["requirement_count"], 2)
+        self.assertGreaterEqual(dashboard["development_task_count"], 2)
+        self.assertGreaterEqual(dashboard["quality_result_count"], 1)
+        self.assertTrue(dashboard["risk_candidates"])
+        self.assertTrue(dashboard["next_action_candidates"])
+        self.assertTrue(result.analysis["used_db_context"])
+        self.assertTrue(result.analysis["saved_agent_run"])
         with closing(database.connect()) as db:
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_runs WHERE id = ?", (result.run_id,)).fetchone()[0], 1)
+            run = db.execute("SELECT * FROM agent_runs WHERE id = ?", (result.run_id,)).fetchone()
+            self.assertEqual(run["agent_name"], "project_control")
+            self.assertEqual(run["status"], "success")
+            self.assertIn("현재 프로젝트 상태 데이터", run["input_prompt"])
+            self.assertEqual(run["output_result"], result.result)
+
+    @patch("app.services.llm_service.OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    @patch("app.services.llm_service.USE_REAL_LLM", True)
+    def test_project_control_ollama_failure_uses_db_fallback(self):
+        with closing(database.connect()) as db:
+            user_id = db.execute("SELECT id FROM users WHERE email = 'demo@example.com'").fetchone()["id"]
+
+        result = chat(AgentChatRequest(agent="project_control", project_id=1, message="위험과 다음 액션"), user_id)
+
+        self.assertTrue(result.mock)
+        self.assertTrue(result.fallback)
+        self.assertIn("다음 액션", result.result)
+        with closing(database.connect()) as db:
+            self.assertEqual(db.execute("SELECT status FROM agent_runs WHERE id = ?", (result.run_id,)).fetchone()["status"], "fallback")
 
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_swagger_password_flow_authorizes_agent_chat(self):

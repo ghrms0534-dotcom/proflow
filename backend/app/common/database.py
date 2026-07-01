@@ -111,7 +111,19 @@ def init_db() -> None:
                 model TEXT NOT NULL DEFAULT '',
                 mock INTEGER NOT NULL DEFAULT 1,
                 fallback INTEGER NOT NULL DEFAULT 0,
+                input_prompt TEXT NOT NULL DEFAULT '',
+                output_result TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'success',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
         )
+        columns = {row[1] for row in db.execute("PRAGMA table_info(agent_runs)").fetchall()}
+        for name, definition in {
+            "input_prompt": "TEXT NOT NULL DEFAULT ''",
+            "output_result": "TEXT NOT NULL DEFAULT ''",
+            "status": "TEXT NOT NULL DEFAULT 'success'",
+        }.items():
+            if name not in columns:
+                db.execute(f"ALTER TABLE agent_runs ADD COLUMN {name} {definition}")
+        db.commit()
