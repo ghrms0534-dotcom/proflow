@@ -44,4 +44,6 @@ export const mockDashboard: DashboardData = {
   projectInfo: { name: 'ProFlow Demo Project', customer: 'Internal', pm: 'Demo User', period: '2026-01-01 ~ 2026-12-31', baseDate: '2026-06-25' },
   planningAgent: { completedCount: 0, totalCount: 6, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   developmentAgent: { completedCount: 0, totalCount: 6, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
+  deliveryAgent: { completedCount: 0, totalCount: 4, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
+  lifecycle: { completedCount: 0, totalCount: 16, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
 };

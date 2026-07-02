@@ -70,3 +70,5 @@ class DashboardResponse(BaseModel):
     project_info: ProjectInfo
     planning_agent: PlanningAgentProgress
     development_agent: PlanningAgentProgress
+    delivery_agent: PlanningAgentProgress
+    lifecycle: PlanningAgentProgress

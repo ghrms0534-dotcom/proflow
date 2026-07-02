@@ -58,6 +58,32 @@ class AgentRunServiceTest(unittest.TestCase):
             dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
             self.assertEqual(dashboard["development_agent"]["progress"], 100)
 
+    def test_delivery_agents_use_full_lifecycle_context(self):
+        with TestClient(app) as client:
+            login = client.post("/api/auth/login", json={"email": "demo@example.com", "password": "1234"})
+            headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+            prompts = {}
+            with patch("app.services.agent_run_service.generate", return_value=llm_service.LlmResult("AI result", "mock", "qwen2.5:3b", False)) as generate:
+                for agent_type in agent_run_service.ALL_AGENT_TYPES:
+                    response = client.post("/api/agents/run", headers=headers, json={"project_id": 1, "agent_type": agent_type, "user_input": "lifecycle"})
+                    self.assertEqual(response.status_code, 200, response.text)
+                    if agent_type in agent_run_service.DELIVERY_AGENT_TYPES:
+                        prompts[agent_type] = generate.call_args.args[0]
+                        self.assertTrue(prompts[agent_type].startswith(agent_run_service.DELIVERY_PROMPTS[agent_type]))
+
+            self.assertIn("integration_test", prompts["quality"])
+            self.assertIn("quality", prompts["defect"])
+            self.assertIn("ui_design", prompts["document"])
+            self.assertIn("document", prompts["delivery_output"])
+            context = client.get("/api/projects/1/agent-context", headers=headers).json()
+            self.assertEqual(context["delivery"]["completed_count"], 4)
+            self.assertEqual(context["delivery"]["progress"], 100)
+            self.assertEqual(context["lifecycle"]["completed_count"], 16)
+            self.assertEqual(context["lifecycle"]["progress"], 100)
+            dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
+            self.assertEqual(dashboard["delivery_agent"]["progress"], 100)
+            self.assertEqual(dashboard["lifecycle"]["progress"], 100)
+
     def test_planning_agent_run_uses_prompts_and_saves_history(self):
         with closing(database.connect()) as db:
             runs_before = db.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id = 1 AND agent_name IN ('requirement','schedule','wbs','ui_design','database_design','api_design')").fetchone()[0]

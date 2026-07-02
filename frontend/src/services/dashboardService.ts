@@ -43,6 +43,8 @@ type BackendDashboard = {
   project_info?: { name: string; customer: string; pm: string; period: string; base_date: string };
   planning_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
   development_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
+  delivery_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
+  lifecycle?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
 };
 
 function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardData {
@@ -102,6 +104,22 @@ function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardDa
       latestAgent: data.development_agent?.latest_agent ?? null,
       lastRunAt: data.development_agent?.last_run_at ?? null,
       hasFailure: data.development_agent?.has_failure ?? false,
+    },
+    deliveryAgent: {
+      completedCount: data.delivery_agent?.completed_count ?? 0,
+      totalCount: data.delivery_agent?.total_count ?? 4,
+      progress: data.delivery_agent?.progress ?? 0,
+      latestAgent: data.delivery_agent?.latest_agent ?? null,
+      lastRunAt: data.delivery_agent?.last_run_at ?? null,
+      hasFailure: data.delivery_agent?.has_failure ?? false,
+    },
+    lifecycle: {
+      completedCount: data.lifecycle?.completed_count ?? 0,
+      totalCount: data.lifecycle?.total_count ?? 16,
+      progress: data.lifecycle?.progress ?? 0,
+      latestAgent: data.lifecycle?.latest_agent ?? null,
+      lastRunAt: data.lifecycle?.last_run_at ?? null,
+      hasFailure: data.lifecycle?.has_failure ?? false,
     },
   };
 }

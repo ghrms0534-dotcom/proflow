@@ -39,12 +39,19 @@ DEVELOPMENT_PROMPTS = {
     "unit_test": "단위 테스트 케이스, mock 대상과 기대 결과를 생성하세요.",
     "integration_test": "통합 테스트 시나리오, API 흐름과 데이터 검증 케이스를 생성하세요.",
 }
-AGENT_PROMPTS = {**PLANNING_PROMPTS, **DEVELOPMENT_PROMPTS}
+DELIVERY_PROMPTS = {
+    "quality": "품질 기준, 검증 체크리스트, 누락 위험과 승인 기준을 생성하세요.",
+    "defect": "결함 후보, 심각도, 원인, 조치 방안과 재현 조건을 생성하세요.",
+    "document": "사용자 문서, 운영 문서와 개발 문서의 초안을 생성하세요.",
+    "delivery_output": "최종 산출물 목록, 제출 상태와 릴리즈 체크리스트를 생성하세요.",
+}
+AGENT_PROMPTS = {**PLANNING_PROMPTS, **DEVELOPMENT_PROMPTS, **DELIVERY_PROMPTS}
 
 
 PLANNING_AGENT_TYPES = tuple(PLANNING_PROMPTS)
 DEVELOPMENT_AGENT_TYPES = tuple(DEVELOPMENT_PROMPTS)
-ALL_AGENT_TYPES = (*PLANNING_AGENT_TYPES, *DEVELOPMENT_AGENT_TYPES)
+DELIVERY_AGENT_TYPES = tuple(DELIVERY_PROMPTS)
+ALL_AGENT_TYPES = (*PLANNING_AGENT_TYPES, *DEVELOPMENT_AGENT_TYPES, *DELIVERY_AGENT_TYPES)
 CONTEXT_DEPENDENCIES = {
     "requirement": (),
     "schedule": ("requirement",),
@@ -58,6 +65,10 @@ CONTEXT_DEPENDENCIES = {
     "code_review": ("development", "source_management"),
     "unit_test": ("requirement", "api_design", "development"),
     "integration_test": ("requirement", "api_design", "database_design", "unit_test"),
+    "quality": ("requirement", "api_design", "database_design", "development", "unit_test", "integration_test"),
+    "defect": ("quality", "unit_test", "integration_test", "code_review"),
+    "document": ("requirement", "ui_design", "api_design", "database_design", "development"),
+    "delivery_output": ("requirement", "wbs", "development", "quality", "defect", "document"),
 }
 
 
@@ -86,12 +97,13 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
                 "latest_agent": newest["agent_type"] if newest else None, "last_run_at": newest["created_at"] if newest else None,
                 "has_failure": any(item["status"] != "success" for item in items)}
     return {"project_id": project_id, "project": dict(project), "agents": latest,
-            "planning": progress(PLANNING_AGENT_TYPES), "development": progress(DEVELOPMENT_AGENT_TYPES)}
+            "planning": progress(PLANNING_AGENT_TYPES), "development": progress(DEVELOPMENT_AGENT_TYPES),
+            "delivery": progress(DELIVERY_AGENT_TYPES), "lifecycle": progress(ALL_AGENT_TYPES)}
 
 
 def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
     project_context = get_agent_context(payload.project_id, user_id)
-    # ponytail: latest full outputs are enough for this 12-agent scope; use summaries/token limits if prompts approach the model context window.
+    # ponytail: latest full outputs are enough for this 16-agent scope; use summaries/token limits if prompts approach the model context window.
     dependencies = {name: project_context["project"] if name == "project_config" else project_context["agents"][name]["output_text"]
                     for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name == "project_config" or name in project_context["agents"]}
     with closing(database.connect()) as db:

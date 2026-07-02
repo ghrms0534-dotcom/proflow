@@ -68,6 +68,8 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
                              "base_date": date.today().isoformat()},
             "planning_agent": agent_context["planning"],
             "development_agent": agent_context["development"],
+            "delivery_agent": agent_context["delivery"],
+            "lifecycle": agent_context["lifecycle"],
         }
 
 
