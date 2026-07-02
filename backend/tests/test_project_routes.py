@@ -1,11 +1,13 @@
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.common import database
 from app.db.seed import seed
+from app.services import llm_service
 from main import app
 
 
@@ -98,6 +100,47 @@ class ProjectRoutesTest(unittest.TestCase):
         self.assertTrue(any(item["type"] == "API Design" for item in dashboard["recent_activities"]))
         for path, item_id in created:
             self.assertEqual(self.client.delete(f"/api/projects/1/{path}/{item_id}", headers=self.headers).status_code, 204)
+
+    def test_document_upload_rag_context_and_delete(self):
+        summary = llm_service.LlmResult("요구사항 문서 요약", "mock", "qwen2.5:3b", False)
+        with patch("app.api.project_routes.generate", return_value=summary):
+            uploaded = self.client.post("/api/projects/1/documents/upload", headers=self.headers,
+                                        files={"file": ("requirements.md", b"# Requirements\nLogin and audit logging", "text/markdown")})
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        document = uploaded.json()
+        self.assertEqual(document["filename"], "requirements.md")
+        self.assertEqual(document["summary"], "요구사항 문서 요약")
+
+        listed = self.client.get("/api/projects/1/documents", headers=self.headers).json()
+        self.assertTrue(any(item["id"] == document["id"] for item in listed["project_documents"]))
+        detail = self.client.get(f"/api/projects/1/documents/{document['id']}", headers=self.headers)
+        self.assertIn("Login and audit logging", detail.json()["project_document"]["extracted_text"])
+        context = self.client.get("/api/projects/1/agent-context", headers=self.headers).json()
+        self.assertEqual(context["document_context"][0]["filename"], "requirements.md")
+
+        with patch("app.services.agent_run_service.generate", return_value=summary) as generate:
+            run = self.client.post("/api/agents/run", headers=self.headers,
+                                   json={"project_id": 1, "agent_type": "requirement", "user_input": "문서 분석"})
+        self.assertEqual(run.status_code, 200, run.text)
+        self.assertIn("project_documents", generate.call_args.args[0])
+        with patch("app.services.agent_run_service.generate", return_value=summary) as generate:
+            orchestration = self.client.post("/api/project-control/orchestrate", headers=self.headers,
+                                             json={"project_id": 1, "user_input": "문서 기반 실행", "plan": ["requirement"]})
+        self.assertEqual(orchestration.status_code, 200, orchestration.text)
+        self.assertIn("project_documents", generate.call_args.args[0])
+        dashboard = self.client.get("/api/projects/1/dashboard", headers=self.headers).json()
+        self.assertGreaterEqual(dashboard["project_documents"]["count"], 1)
+        self.assertTrue(dashboard["project_documents"]["context_used"])
+
+        empty = self.client.post("/api/projects/1/documents/upload", headers=self.headers,
+                                 files={"file": ("empty.txt", b"", "text/plain")})
+        unsupported = self.client.post("/api/projects/1/documents/upload", headers=self.headers,
+                                       files={"file": ("image.png", b"png", "image/png")})
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(unsupported.status_code, 415)
+        self.assertEqual(self.client.delete(f"/api/projects/1/documents/{document['id']}?uploaded=true", headers=self.headers).status_code, 204)
+        remaining = self.client.get("/api/projects/1/documents", headers=self.headers).json()["project_documents"]
+        self.assertFalse(any(item["id"] == document["id"] for item in remaining))
 
     def test_development_area_crud_updates_activity_and_dashboard(self):
         cases = [

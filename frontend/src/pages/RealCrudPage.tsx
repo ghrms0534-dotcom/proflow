@@ -112,6 +112,7 @@ export function RealCrudPage({ resource }: { resource: RealResource }) {
     {agentType && <Card className="mb-3 p-4">
       <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
         <div className="text-xs font-semibold text-emerald-800">{deliveryAgent ? 'Planning + Development Context 사용 중' : agentType && ['development', 'code_review', 'unit_test', 'integration_test'].includes(agentType) ? 'Planning Context 사용 중' : '현재 프로젝트 컨텍스트 사용'}</div>
+        <div className="mt-1 text-[10px] text-emerald-700">프로젝트 문서 context 사용 중 · {projectContext?.documents_status.count ?? 0}개</div>
         {contextError && <div className="mt-2 text-xs text-red-700">{contextError}</div>}
         <div className="mt-2 grid gap-2 md:grid-cols-3">{((deliveryAgent ? ['requirement', 'wbs', 'api_design', 'database_design', 'development', 'code_review', 'unit_test', 'integration_test'] : ['requirement', 'schedule', 'wbs', 'ui_design', 'database_design', 'api_design']) as AgentType[]).map((type) => <div key={type} className="rounded bg-white/80 p-2"><div className="text-[10px] font-semibold uppercase text-[#64748B]">{type}</div><div className="mt-1 line-clamp-2 text-xs text-[#334155]">{projectContext?.agents[type]?.summary ?? '실행 결과 없음'}</div></div>)}</div>
       </div>

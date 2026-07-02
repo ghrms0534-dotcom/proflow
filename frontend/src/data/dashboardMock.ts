@@ -48,4 +48,5 @@ export const mockDashboard: DashboardData = {
   lifecycle: { completedCount: 0, totalCount: 19, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   systemAgent: { completedCount: 0, totalCount: 3, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   orchestration: { id: null, status: 'idle', completedSteps: 0, totalSteps: 0, failedSteps: [], lastRunAt: null },
+  projectDocuments: { count: 0, recentFilename: null, recentUploadedAt: null, contextUsed: false },
 };

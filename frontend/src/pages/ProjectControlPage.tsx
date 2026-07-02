@@ -4,8 +4,8 @@ import { DashboardAgent } from '../agents/dashboard/dashboardAgent';
 import type { DashboardAnalysisMode } from '../agents/dashboard/dashboardAgent.types';
 import type { AiRecommendation, DashboardData, DashboardLoadState } from '../types/dashboard';
 import type { SectionAgentState } from '../types/agentWorkspace';
-import { AgentService } from '../services/projectService';
-import type { AgentType, OrchestrationResponse } from '../services/projectService';
+import { AgentService, ProjectDocumentService } from '../services/projectService';
+import type { AgentType, OrchestrationResponse, UploadedDocument } from '../services/projectService';
 import { useAppStore } from '../store';
 import { Card, InfoRow, Priority, ProgressRing, ReleaseCheckBadge, SectionHeader, StageProgress, StatusBadge } from './SectionUi';
 const dashboardActivityIcons = {
@@ -60,7 +60,26 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
   const [orchestrationResult, setOrchestrationResult] = useState<OrchestrationResponse | null>(null);
   const [activePlan, setActivePlan] = useState<AgentType[]>([]);
   const [continueOnFailure, setContinueOnFailure] = useState(true);
+  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [documentLoading, setDocumentLoading] = useState(false);
+  const [documentError, setDocumentError] = useState('');
+  useEffect(() => { if (projectId) void ProjectDocumentService.list(projectId).then(setDocuments).catch(() => setDocumentError('문서 목록을 불러오지 못했습니다.')); }, [projectId]);
   if (!data) return <main className="flex flex-1 items-center justify-center text-sm text-slate-500">{loadState === 'loading' ? '불러오는 중...' : '대시보드 임시 데이터를 준비 중입니다.'}</main>;
+
+  const uploadDocument = async () => {
+    if (!projectId || !uploadFile) { setDocumentError('업로드할 파일을 선택해주세요.'); return; }
+    setDocumentLoading(true); setDocumentError('');
+    try { await ProjectDocumentService.upload(projectId, uploadFile); setDocuments(await ProjectDocumentService.list(projectId)); setUploadFile(null); window.dispatchEvent(new Event('proflow:agent-run')); }
+    catch { setDocumentError('문서 업로드에 실패했습니다. 지원 형식과 파일 내용을 확인해주세요.'); }
+    finally { setDocumentLoading(false); }
+  };
+
+  const deleteDocument = async (id: number) => {
+    if (!projectId || !window.confirm('업로드 문서를 삭제할까요?')) return;
+    try { await ProjectDocumentService.remove(projectId, id); setDocuments(await ProjectDocumentService.list(projectId)); window.dispatchEvent(new Event('proflow:agent-run')); }
+    catch { setDocumentError('문서 삭제에 실패했습니다.'); }
+  };
 
   const runOrchestration = async (plan?: AgentType[]) => {
     if (!projectId || !orchestrationInput.trim()) { setOrchestrationError('자동 실행 요청을 입력해주세요.'); return; }
@@ -100,6 +119,12 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
             {error}. mock 데이터로 대시보드를 표시합니다.
           </div>
         )}
+
+        <Card className="mb-3 p-3">
+          <div className="flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-sm font-semibold">프로젝트 문서 RAG</h2><p className="mt-1 text-xs text-[#64748B]">등록 {data.projectDocuments.count}개 · 최근 {data.projectDocuments.recentFilename ?? '-'} · Agent context {data.projectDocuments.contextUsed ? '사용됨' : '대기'} · 최대 5MB</p></div><input type="file" accept=".txt,.md,.json,.csv" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} className="text-xs" /><button disabled={documentLoading} onClick={() => void uploadDocument()} className="rounded bg-[#0b66e4] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{documentLoading ? '분석 중...' : '업로드 및 분석'}</button></div>
+          {documentError && <div className="mt-2 text-xs text-red-700">{documentError}</div>}
+          <div className="mt-3 grid gap-2 md:grid-cols-2">{documents.map((document) => <div key={document.id} className="rounded border border-slate-200 p-3"><div className="flex justify-between gap-2"><div><b className="text-xs">{document.filename}</b><div className="text-[10px] text-[#64748B]">{document.file_type} · {document.created_at.replace('T', ' ').slice(0, 16)}</div></div><button onClick={() => void deleteDocument(document.id)} className="text-xs text-red-600">삭제</button></div><div className="mt-2 line-clamp-3 text-xs text-[#334155]">{document.summary}</div></div>)}{!documents.length && <div className="text-xs text-[#64748B]">업로드된 문서가 없습니다.</div>}</div>
+        </Card>
 
         <Card className="mb-3 p-3">
           <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Project Control 전체 자동 실행</h2><p className="mt-1 text-xs text-[#64748B]">Agent를 순서대로 실행하고 각 결과를 다음 단계 context로 전달합니다.</p></div><div className="text-right text-[10px] text-[#64748B]">최근 상태: {data.orchestration.status}<br />마지막 실행: {data.orchestration.lastRunAt?.replace('T', ' ').slice(0, 16) ?? '-'}</div></div>

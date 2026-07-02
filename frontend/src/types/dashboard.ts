@@ -77,6 +77,7 @@ export interface DashboardData {
   lifecycle: { completedCount: number; totalCount: number; progress: number; latestAgent: string | null; lastRunAt: string | null; hasFailure: boolean };
   systemAgent: { completedCount: number; totalCount: number; progress: number; latestAgent: string | null; lastRunAt: string | null; hasFailure: boolean };
   orchestration: { id: number | null; status: string; completedSteps: number; totalSteps: number; failedSteps: string[]; lastRunAt: string | null };
+  projectDocuments: { count: number; recentFilename: string | null; recentUploadedAt: string | null; contextUsed: boolean };
 }
 
 export type DashboardLoadState = 'loading' | 'ready' | 'fallback';

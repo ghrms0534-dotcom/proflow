@@ -47,6 +47,7 @@ type BackendDashboard = {
   lifecycle?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
   system_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
   orchestration?: { id: number | null; status: string; completed_steps: number; total_steps: number; failed_steps: string[]; last_run_at: string | null };
+  project_documents?: { count: number; recent_filename: string | null; recent_uploaded_at: string | null; context_used: boolean };
 };
 
 function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardData {
@@ -138,6 +139,12 @@ function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardDa
       totalSteps: data.orchestration?.total_steps ?? 0,
       failedSteps: data.orchestration?.failed_steps ?? [],
       lastRunAt: data.orchestration?.last_run_at ?? null,
+    },
+    projectDocuments: {
+      count: data.project_documents?.count ?? 0,
+      recentFilename: data.project_documents?.recent_filename ?? null,
+      recentUploadedAt: data.project_documents?.recent_uploaded_at ?? null,
+      contextUsed: data.project_documents?.context_used ?? false,
     },
   };
 }

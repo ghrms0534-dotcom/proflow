@@ -5,6 +5,7 @@ export type AgentRun = { id: number; agent_type: AgentType; result: string; prov
 export type AgentRunResponse = { run_id: number; agent_type: AgentType; status: string; result: string; provider: string; model: string; fallback: boolean; recent_runs: AgentRun[] };
 export type OrchestrationStep = { agent_type: AgentType; status: 'pending' | 'running' | 'completed' | 'failed'; result: string; run_id: number | null };
 export type OrchestrationResponse = { id: number; project_id: number; status: string; steps: OrchestrationStep[]; failed_steps: string[]; created_at: string; completed_at: string | null };
+export type UploadedDocument = { id: number; project_id: number; filename: string; file_type: string; file_path: string; extracted_text: string; summary: string; created_at: string };
 export type ProjectAgentContext = {
   project_id: number;
   project: Record<string, unknown>;
@@ -15,6 +16,9 @@ export type ProjectAgentContext = {
   lifecycle: AgentProgress;
   system: AgentProgress;
   settings: Record<string, unknown>;
+  documents: Omit<UploadedDocument, 'extracted_text' | 'file_path'>[];
+  document_context: { filename: string; summary: string; excerpt: string }[];
+  documents_status: { count: number; recent_filename: string | null; recent_uploaded_at: string | null; context_used: boolean };
 };
 export type AgentProgress = { completed_count: number; total_count: number; progress: number; latest_agent: AgentType | null; last_run_at: string | null; has_failure: boolean };
 
@@ -24,6 +28,12 @@ export const AgentService = {
   getContext: (projectId: number | string) => api.get<ProjectAgentContext>(`/projects/${projectId}/agent-context`).then(({ data }) => data),
   orchestrate: (projectId: number | string, userInput: string, plan?: AgentType[], continueOnFailure = true) =>
     api.post<OrchestrationResponse>('/project-control/orchestrate', { project_id: Number(projectId), user_input: userInput, plan, continue_on_failure: continueOnFailure }).then(({ data }) => data),
+};
+
+export const ProjectDocumentService = {
+  list: (projectId: number | string) => api.get(`/projects/${projectId}/documents`).then(({ data }) => data.project_documents as UploadedDocument[]),
+  upload: (projectId: number | string, file: File) => { const form = new FormData(); form.append('file', file); return api.post<UploadedDocument>(`/projects/${projectId}/documents/upload`, form).then(({ data }) => data); },
+  remove: (projectId: number | string, id: number) => api.delete(`/projects/${projectId}/documents/${id}?uploaded=true`),
 };
 
 export type RequirementInput = { requirement_key: string; title: string; status?: string; priority?: string; owner?: string };

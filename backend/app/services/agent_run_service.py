@@ -97,6 +97,11 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
             f"SELECT id, agent_name, output_result, summary, status, provider, model, fallback, created_at FROM agent_runs WHERE project_id = ? AND agent_name IN ({','.join('?' for _ in ALL_AGENT_TYPES)}) ORDER BY id DESC",
             (project_id, *ALL_AGENT_TYPES),
         ).fetchall()
+        documents = [dict(row) for row in db.execute(
+            "SELECT id, filename, file_type, summary, extracted_text, created_at FROM project_documents WHERE project_id = ? ORDER BY id DESC LIMIT 10",
+            (project_id,),
+        ).fetchall()]
+        document_count = db.execute("SELECT COUNT(*) FROM project_documents WHERE project_id = ?", (project_id,)).fetchone()[0]
     latest = {}
     for row in rows:
         if row["agent_name"] not in latest:
@@ -114,7 +119,16 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
                 "has_failure": any(item["status"] != "success" for item in items)}
     settings = {"access_summary": {"roles": roles}, "llm_config": {"provider": "ollama", "model": OLLAMA_MODEL,
                 "timeout": LLM_REQUEST_TIMEOUT, "enabled": USE_REAL_LLM}, "enabled_agents": enabled_agents}
+    document_context = [{"filename": item["filename"], "summary": item["summary"],
+                         "excerpt": item["extracted_text"][:1000]} for item in documents]
+    newest_document = documents[0] if documents else None
+    documents_status = {"count": document_count, "recent_filename": newest_document["filename"] if newest_document else None,
+                        "recent_uploaded_at": newest_document["created_at"] if newest_document else None,
+                        "context_used": bool(newest_document and any(item["created_at"] >= newest_document["created_at"] for item in latest.values()))}
     return {"project_id": project_id, "project": dict(project), "settings": settings, "agents": latest,
+            "documents": [{key: value for key, value in item.items() if key != "extracted_text"} for item in documents],
+            "document_context": document_context,
+            "documents_status": documents_status,
             "planning": progress(PLANNING_AGENT_TYPES), "development": progress(DEVELOPMENT_AGENT_TYPES),
             "delivery": progress(DELIVERY_AGENT_TYPES), "system": progress(SYSTEM_AGENT_TYPES), "lifecycle": progress(ALL_AGENT_TYPES)}
 
@@ -126,6 +140,8 @@ def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
                        **project_context["settings"]}
     dependencies = {name: special_context[name] if name in special_context else project_context["agents"][name]["output_text"]
                     for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name in special_context or name in project_context["agents"]}
+    if payload.agent_type not in SYSTEM_AGENT_TYPES and project_context["document_context"]:
+        dependencies["project_documents"] = project_context["document_context"]
     with closing(database.connect()) as db:
         if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (payload.project_id, user_id)).fetchone():
             raise ProjectAccessError("Project access denied")

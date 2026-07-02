@@ -70,6 +70,13 @@ class OrchestrationStatus(BaseModel):
     last_run_at: str | None
 
 
+class ProjectDocumentsStatus(BaseModel):
+    count: int
+    recent_filename: str | None
+    recent_uploaded_at: str | None
+    context_used: bool
+
+
 class DashboardResponse(BaseModel):
     summary: DashboardSummary
     stages: list[StageProgress]
@@ -83,3 +90,4 @@ class DashboardResponse(BaseModel):
     lifecycle: PlanningAgentProgress
     system_agent: PlanningAgentProgress
     orchestration: OrchestrationStatus
+    project_documents: ProjectDocumentsStatus

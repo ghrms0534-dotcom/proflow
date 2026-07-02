@@ -1,15 +1,22 @@
 import sqlite3
+import json
 from contextlib import closing
 from datetime import date
+from pathlib import Path
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app import schemas
 from app.api.auth_routes import get_current_user
 from app.common import database
 from app.services.agent_run_service import get_agent_context, get_latest_orchestration
+from app.services.llm_service import generate
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
+UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "uploads"
+SUPPORTED_DOCUMENT_TYPES = {".txt", ".md", ".json", ".csv"}
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 DONE = {"approved", "completed", "done", "closed", "passed"}
 WAITING = {"planned", "pending", "waiting", "todo"}
 
@@ -72,6 +79,7 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
             "lifecycle": agent_context["lifecycle"],
             "system_agent": agent_context["system"],
             "orchestration": get_latest_orchestration(project_id),
+            "project_documents": agent_context["documents_status"],
         }
 
 
@@ -356,7 +364,60 @@ def delete_defect(project_id: int, item_id: int, current_user=Depends(get_curren
 
 @router.get("/{project_id}/documents")
 def list_documents(project_id: int, current_user=Depends(get_current_user)):
-    return _list(project_id, current_user["id"], "documents")
+    result = _list(project_id, current_user["id"], "documents")
+    with closing(database.connect()) as db:
+        result["project_documents"] = [dict(row) for row in _rows(db, "project_documents", project_id)]
+    return result
+
+
+@router.post("/{project_id}/documents/upload", status_code=status.HTTP_201_CREATED)
+async def upload_document(project_id: int, file: UploadFile = File(...), current_user=Depends(get_current_user)):
+    require_member(project_id, current_user["id"])
+    filename = Path(file.filename or "").name
+    suffix = Path(filename).suffix.lower()
+    if not filename or suffix not in SUPPORTED_DOCUMENT_TYPES:
+        raise HTTPException(status_code=415, detail="Supported file types: txt, md, json, csv")
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds 5 MB")
+    try:
+        text = content.decode("utf-8-sig")
+        if suffix == ".json":
+            text = json.dumps(json.loads(text), ensure_ascii=False, indent=2)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=422, detail="Invalid UTF-8 or JSON content") from error
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    summary = generate(f"다음 프로젝트 문서를 500자 이내로 요약하세요.\n\n{text[:8000]}").text
+    directory = UPLOAD_ROOT / str(project_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{uuid4().hex}{suffix}"
+    path.write_bytes(content)
+    try:
+        with closing(database.connect()) as db:
+            cursor = db.execute(
+                "INSERT INTO project_documents (project_id, filename, file_type, file_path, extracted_text, summary) VALUES (?, ?, ?, ?, ?, ?)",
+                (project_id, filename, suffix[1:], str(path), text, summary),
+            )
+            _log(db, project_id, f"프로젝트 문서 업로드: {filename}", "Document")
+            db.commit()
+            return dict(db.execute("SELECT * FROM project_documents WHERE id = ?", (cursor.lastrowid,)).fetchone())
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+@router.get("/{project_id}/documents/{document_id}")
+def project_document(project_id: int, document_id: int, current_user=Depends(get_current_user)):
+    require_member(project_id, current_user["id"])
+    with closing(database.connect()) as db:
+        row = db.execute("SELECT * FROM project_documents WHERE id = ? AND project_id = ?", (document_id, project_id)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Uploaded document not found")
+    return {"project_document": dict(row)}
 
 
 @router.post("/{project_id}/documents", status_code=status.HTTP_201_CREATED)
@@ -370,8 +431,24 @@ def update_document(project_id: int, item_id: int, payload: schemas.DocumentUpda
 
 
 @router.delete("/{project_id}/documents/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(project_id: int, item_id: int, current_user=Depends(get_current_user)):
-    _delete(project_id, current_user["id"], "documents", item_id, "문서 삭제", "Document")
+def delete_document(project_id: int, item_id: int, uploaded: bool = Query(False), current_user=Depends(get_current_user)):
+    if not uploaded:
+        return _delete(project_id, current_user["id"], "documents", item_id, "문서 삭제", "Document")
+    require_member(project_id, current_user["id"])
+    with closing(database.connect()) as db:
+        row = db.execute("SELECT * FROM project_documents WHERE id = ? AND project_id = ?", (item_id, project_id)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Uploaded document not found")
+        db.execute("DELETE FROM project_documents WHERE id = ?", (item_id,))
+        _log(db, project_id, f"프로젝트 문서 삭제: {row['filename']}", "Document")
+        db.commit()
+    path = Path(row["file_path"]).resolve()
+    if path.is_relative_to(UPLOAD_ROOT.resolve()):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            # ponytail: DB deletion wins; add an orphan-file cleanup job if filesystem locks recur in production.
+            pass
 
 
 @router.get("/{project_id}/outputs")
