@@ -42,6 +42,7 @@ type BackendDashboard = {
   recent_activities?: { message: string; type: string; created_at: string }[];
   project_info?: { name: string; customer: string; pm: string; period: string; base_date: string };
   planning_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
+  development_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
 };
 
 function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardData {
@@ -93,6 +94,14 @@ function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardDa
       latestAgent: data.planning_agent?.latest_agent ?? null,
       lastRunAt: data.planning_agent?.last_run_at ?? null,
       hasFailure: data.planning_agent?.has_failure ?? false,
+    },
+    developmentAgent: {
+      completedCount: data.development_agent?.completed_count ?? 0,
+      totalCount: data.development_agent?.total_count ?? 6,
+      progress: data.development_agent?.progress ?? 0,
+      latestAgent: data.development_agent?.latest_agent ?? null,
+      lastRunAt: data.development_agent?.last_run_at ?? null,
+      hasFailure: data.development_agent?.has_failure ?? false,
     },
   };
 }

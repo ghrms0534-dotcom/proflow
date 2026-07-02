@@ -111,6 +111,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   const displayedSectionAgents = sectionAgents.map((agent) => {
     if (agent.section === '분석 · 설계') return { ...agent, progress: planningProgress, status: planningReady ? '완료' : '분석중', recentTasks: agent.recentTasks + planningSnapshot.activityCount, riskLevel: planningRisk };
     if (agent.section === '검증 · 품질') return { ...agent, progress: qualityScore, status: qualityReady ? '검증 준비' : '검증중', recentTasks: agent.recentTasks + qualitySnapshot.audit.length, riskLevel: qualityRisk };
+    if (agent.agentName === 'Development Execution Agent' && dashboardData) return { ...agent, progress: dashboardData.developmentAgent.progress, status: dashboardData.developmentAgent.completedCount === 6 ? '완료' : '진행중', recentTasks: dashboardData.developmentAgent.completedCount, riskLevel: dashboardData.developmentAgent.hasFailure ? 'CRITICAL' as const : dashboardData.developmentAgent.completedCount === 6 ? 'SAFE' as const : 'WARN' as const };
     if (agent.agentName === 'Development Execution Agent' && qualitySnapshot.criticalIssues > 0) return { ...agent, status: '재작업 필요', riskLevel: 'CRITICAL' as const };
     return agent.agentName === 'Development Execution Agent' && planningReady ? { ...agent, status: '준비 가능', riskLevel: 'SAFE' as const } : agent;
   });

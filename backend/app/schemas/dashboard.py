@@ -69,3 +69,4 @@ class DashboardResponse(BaseModel):
     recent_activities: list[RecentActivity]
     project_info: ProjectInfo
     planning_agent: PlanningAgentProgress
+    development_agent: PlanningAgentProgress

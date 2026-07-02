@@ -31,9 +31,20 @@ PLANNING_PROMPTS = {
     "database_design": "테이블 후보, 주요 컬럼, 관계와 제약조건을 작성하세요.",
     "api_design": "endpoint, HTTP method, request/response와 validation 규칙을 작성하세요.",
 }
+DEVELOPMENT_PROMPTS = {
+    "development": "개발 작업 목록, 구현 순서, 주요 로직과 산출 코드 구조를 제안하세요.",
+    "configuration": "브랜치 전략, 환경 설정과 빌드/배포 설정을 제안하세요.",
+    "source_management": "커밋 단위, 변경 파일 구조와 merge 전략을 제안하세요.",
+    "code_review": "코드 리뷰 체크리스트, 위험 코드와 개선 포인트를 제안하세요.",
+    "unit_test": "단위 테스트 케이스, mock 대상과 기대 결과를 생성하세요.",
+    "integration_test": "통합 테스트 시나리오, API 흐름과 데이터 검증 케이스를 생성하세요.",
+}
+AGENT_PROMPTS = {**PLANNING_PROMPTS, **DEVELOPMENT_PROMPTS}
 
 
 PLANNING_AGENT_TYPES = tuple(PLANNING_PROMPTS)
+DEVELOPMENT_AGENT_TYPES = tuple(DEVELOPMENT_PROMPTS)
+ALL_AGENT_TYPES = (*PLANNING_AGENT_TYPES, *DEVELOPMENT_AGENT_TYPES)
 CONTEXT_DEPENDENCIES = {
     "requirement": (),
     "schedule": ("requirement",),
@@ -41,6 +52,12 @@ CONTEXT_DEPENDENCIES = {
     "ui_design": ("requirement", "wbs"),
     "database_design": ("requirement", "api_design", "ui_design"),
     "api_design": ("requirement", "database_design"),
+    "development": ("requirement", "wbs", "api_design", "database_design"),
+    "configuration": ("project_config", "wbs", "development"),
+    "source_management": ("development", "configuration"),
+    "code_review": ("development", "source_management"),
+    "unit_test": ("requirement", "api_design", "development"),
+    "integration_test": ("requirement", "api_design", "database_design", "unit_test"),
 }
 
 
@@ -48,9 +65,10 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
     with closing(database.connect()) as db:
         if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (project_id, user_id)).fetchone():
             raise ProjectAccessError("Project access denied")
+        project = db.execute("SELECT id, name, description, status, start_date, end_date FROM projects WHERE id = ?", (project_id,)).fetchone()
         rows = db.execute(
-            f"SELECT id, agent_name, output_result, summary, status, provider, model, fallback, created_at FROM agent_runs WHERE project_id = ? AND agent_name IN ({','.join('?' for _ in PLANNING_AGENT_TYPES)}) ORDER BY id DESC",
-            (project_id, *PLANNING_AGENT_TYPES),
+            f"SELECT id, agent_name, output_result, summary, status, provider, model, fallback, created_at FROM agent_runs WHERE project_id = ? AND agent_name IN ({','.join('?' for _ in ALL_AGENT_TYPES)}) ORDER BY id DESC",
+            (project_id, *ALL_AGENT_TYPES),
         ).fetchall()
     latest = {}
     for row in rows:
@@ -60,25 +78,27 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
                 "output_text": row["output_result"], "status": row["status"], "provider": row["provider"],
                 "model": row["model"], "fallback": bool(row["fallback"]), "created_at": row["created_at"],
             }
-    completed = sum(item["status"] == "success" for item in latest.values())
-    newest = next(iter(latest.values()), None)
-    return {"project_id": project_id, "agents": latest, "planning": {
-        "completed_count": completed, "total_count": len(PLANNING_AGENT_TYPES),
-        "progress": round(completed / len(PLANNING_AGENT_TYPES) * 100),
-        "latest_agent": newest["agent_type"] if newest else None, "last_run_at": newest["created_at"] if newest else None,
-        "has_failure": any(item["status"] != "success" for item in latest.values()),
-    }}
+    def progress(types):
+        items = [latest[name] for name in types if name in latest]
+        completed = sum(item["status"] == "success" for item in items)
+        newest = max(items, key=lambda item: item["id"], default=None)
+        return {"completed_count": completed, "total_count": len(types), "progress": round(completed / len(types) * 100),
+                "latest_agent": newest["agent_type"] if newest else None, "last_run_at": newest["created_at"] if newest else None,
+                "has_failure": any(item["status"] != "success" for item in items)}
+    return {"project_id": project_id, "project": dict(project), "agents": latest,
+            "planning": progress(PLANNING_AGENT_TYPES), "development": progress(DEVELOPMENT_AGENT_TYPES)}
 
 
 def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
     project_context = get_agent_context(payload.project_id, user_id)
-    # ponytail: latest full outputs are enough for six planning agents; use summaries/token limits if prompts approach the model context window.
-    dependencies = {name: project_context["agents"][name]["output_text"] for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name in project_context["agents"]}
+    # ponytail: latest full outputs are enough for this 12-agent scope; use summaries/token limits if prompts approach the model context window.
+    dependencies = {name: project_context["project"] if name == "project_config" else project_context["agents"][name]["output_text"]
+                    for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name == "project_config" or name in project_context["agents"]}
     with closing(database.connect()) as db:
         if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (payload.project_id, user_id)).fetchone():
             raise ProjectAccessError("Project access denied")
 
-    prompt = f"{PLANNING_PROMPTS[payload.agent_type]}\n\n사용자 요청:\n{payload.user_input}\n\n추가 컨텍스트:\n{payload.context}"
+    prompt = f"{AGENT_PROMPTS[payload.agent_type]}\n\n사용자 요청:\n{payload.user_input}\n\n추가 컨텍스트:\n{payload.context}"
     prompt += f"\n\nLifecycle context:\n{dependencies}"
     llm = generate(prompt)
     status = "fallback" if llm.fallback else "success"

@@ -1,16 +1,19 @@
 import api from './api';
 
-export type PlanningAgentType = 'requirement' | 'schedule' | 'wbs' | 'ui_design' | 'database_design' | 'api_design';
-export type AgentRun = { id: number; agent_type: PlanningAgentType; result: string; provider: string; model: string; fallback: boolean; created_at: string };
-export type AgentRunResponse = { run_id: number; agent_type: PlanningAgentType; status: string; result: string; provider: string; model: string; fallback: boolean; recent_runs: AgentRun[] };
+export type AgentType = 'requirement' | 'schedule' | 'wbs' | 'ui_design' | 'database_design' | 'api_design' | 'development' | 'configuration' | 'source_management' | 'code_review' | 'unit_test' | 'integration_test';
+export type AgentRun = { id: number; agent_type: AgentType; result: string; provider: string; model: string; fallback: boolean; created_at: string };
+export type AgentRunResponse = { run_id: number; agent_type: AgentType; status: string; result: string; provider: string; model: string; fallback: boolean; recent_runs: AgentRun[] };
 export type ProjectAgentContext = {
   project_id: number;
-  agents: Partial<Record<PlanningAgentType, AgentRun & { summary: string; output_text: string; status: string }>>;
-  planning: { completed_count: number; total_count: number; progress: number; latest_agent: PlanningAgentType | null; last_run_at: string | null; has_failure: boolean };
+  project: Record<string, unknown>;
+  agents: Partial<Record<AgentType, AgentRun & { summary: string; output_text: string; status: string }>>;
+  planning: AgentProgress;
+  development: AgentProgress;
 };
+export type AgentProgress = { completed_count: number; total_count: number; progress: number; latest_agent: AgentType | null; last_run_at: string | null; has_failure: boolean };
 
 export const AgentService = {
-  run: (projectId: number | string, agentType: PlanningAgentType, userInput: string, context: Record<string, unknown> = {}) =>
+  run: (projectId: number | string, agentType: AgentType, userInput: string, context: Record<string, unknown> = {}) =>
     api.post<AgentRunResponse>('/agents/run', { project_id: Number(projectId), agent_type: agentType, user_input: userInput, context }).then(({ data }) => data),
   getContext: (projectId: number | string) => api.get<ProjectAgentContext>(`/projects/${projectId}/agent-context`).then(({ data }) => data),
 };

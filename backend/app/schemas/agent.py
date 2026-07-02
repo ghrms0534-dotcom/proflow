@@ -2,12 +2,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-PlanningAgentType = Literal["requirement", "schedule", "wbs", "ui_design", "database_design", "api_design"]
+AgentType = Literal[
+    "requirement", "schedule", "wbs", "ui_design", "database_design", "api_design",
+    "development", "configuration", "source_management", "code_review", "unit_test", "integration_test",
+]
 
 
 class AgentRunRequest(BaseModel):
     project_id: int = Field(gt=0)
-    agent_type: PlanningAgentType
+    agent_type: AgentType
     user_input: str = Field(min_length=1, max_length=10000)
     context: dict[str, Any] = Field(default_factory=dict)
 
@@ -24,7 +27,7 @@ class AgentRunSummary(BaseModel):
 
 class AgentRunResponse(BaseModel):
     run_id: int
-    agent_type: PlanningAgentType
+    agent_type: AgentType
     status: str
     result: str
     provider: str

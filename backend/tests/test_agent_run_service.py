@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.common import config, database
 from app.db.seed import seed
 from app.schemas.agent import AgentChatRequest
-from app.services import llm_service
+from app.services import agent_run_service, llm_service
 from app.services.agent_run_service import chat
 from main import app
 
@@ -31,6 +31,32 @@ class AgentRunServiceTest(unittest.TestCase):
     def test_invalid_llm_timeout_uses_default(self):
         with patch.dict("os.environ", {"TEST_LLM_TIMEOUT": "invalid"}):
             self.assertEqual(config._positive_int("TEST_LLM_TIMEOUT", 60), 60)
+
+    def test_development_agents_use_planning_context_and_update_dashboard(self):
+        with TestClient(app) as client:
+            login = client.post("/api/auth/login", json={"email": "demo@example.com", "password": "1234"})
+            headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+            prompts = {}
+            with patch("app.services.agent_run_service.generate", return_value=llm_service.LlmResult("AI result", "mock", "qwen2.5:3b", False)) as generate:
+                for agent_type in ("requirement", "wbs", "api_design", "database_design"):
+                    client.post("/api/agents/run", headers=headers, json={"project_id": 1, "agent_type": agent_type, "user_input": "planning"})
+                for agent_type in agent_run_service.DEVELOPMENT_AGENT_TYPES:
+                    response = client.post("/api/agents/run", headers=headers, json={"project_id": 1, "agent_type": agent_type, "user_input": "development"})
+                    self.assertEqual(response.status_code, 200, response.text)
+                    prompt = generate.call_args.args[0]
+                    prompts[agent_type] = prompt
+                    self.assertTrue(prompt.startswith(agent_run_service.DEVELOPMENT_PROMPTS[agent_type]))
+
+            self.assertIn("unit_test", prompt)
+            self.assertIn("project_config", prompts["configuration"])
+            self.assertIn("source_management", prompts["code_review"])
+            context = client.get("/api/projects/1/agent-context", headers=headers).json()
+            self.assertEqual(context["development"]["completed_count"], 6)
+            self.assertEqual(context["development"]["progress"], 100)
+            self.assertEqual(context["development"]["latest_agent"], "integration_test")
+            self.assertIn("name", context["project"])
+            dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
+            self.assertEqual(dashboard["development_agent"]["progress"], 100)
 
     def test_planning_agent_run_uses_prompts_and_saves_history(self):
         with closing(database.connect()) as db:

@@ -55,6 +55,7 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
              "priority": row["priority"] if "priority" in row.keys() else row["risk_level"] if "risk_level" in row.keys() else "MEDIUM"}
             for stage_name, rows in groups for row in rows
         ]
+        agent_context = get_agent_context(project_id, current_user["id"])
         return {
             "summary": {"progress": round(completed / total * 100) if total else 0, "total_tasks": total,
                         "completed_tasks": completed, "in_progress_tasks": total - completed - waiting,
@@ -65,7 +66,8 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
             "project_info": {"name": project["name"], "customer": project["description"] or "Internal",
                              "pm": current_user["name"], "period": f"{project['start_date']} ~ {project['end_date']}",
                              "base_date": date.today().isoformat()},
-            "planning_agent": get_agent_context(project_id, current_user["id"])["planning"],
+            "planning_agent": agent_context["planning"],
+            "development_agent": agent_context["development"],
         }
 
 

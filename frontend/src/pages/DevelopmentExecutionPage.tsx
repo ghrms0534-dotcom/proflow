@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Bell, BookOpen, Bot, Box, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardCheck, Code2, Database, FileCode2, FileText, HelpCircle, Home, LayoutDashboard, Menu, MessageSquare, PackageCheck, Search, Send, Settings, ShieldCheck, Sparkles, Star, TestTube2, UserCircle } from 'lucide-react';
 import { Card, GitBranchIcon, PageShell, ReleaseCheckBadge, SectionHeader, StatusBadge } from './SectionUi';
 import { SectionWorkspace, developmentWorkspaceItems } from './SectionWorkspace';
 import type { SectionAgentState, WorkspaceAction } from '../types/agentWorkspace';
 import { RealCrudPage } from './RealCrudPage';
+import { AgentService } from '../services/projectService';
+import type { AgentRun, AgentType, ProjectAgentContext } from '../services/projectService';
+import { useAppStore } from '../store';
 const releaseEnvironments = [
   {
     env: 'dev',
@@ -62,8 +65,32 @@ const releaseEnvironments = [
 ];
 
 
-function DevWorkspaceShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return <PageShell title={title} subtitle={subtitle} actions={<span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Local Mock · Ready</span>} showAgent={false}>{children}</PageShell>;
+function DevWorkspaceShell({ title, subtitle, children, agentType }: { title: string; subtitle: string; children: React.ReactNode; agentType?: AgentType }) {
+  const type = agentType ?? ({ 'Configuration Agent': 'configuration', 'Source Management Agent': 'source_management' } as Partial<Record<string, AgentType>>)[title];
+  return <PageShell title={title} subtitle={subtitle} actions={<span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Local Mock · Ready</span>} showAgent={false}>{type && <DevelopmentAgentPanel agentType={type} />}{children}</PageShell>;
+}
+
+function DevelopmentAgentPanel({ agentType }: { agentType: AgentType }) {
+  const projectId = useAppStore((state) => state.currentProjectId);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState('');
+  const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [context, setContext] = useState<ProjectAgentContext | null>(null);
+  const loadContext = async () => { if (projectId) setContext(await AgentService.getContext(projectId)); };
+  useEffect(() => { void loadContext().catch(() => setError('Planning Context를 불러오지 못했습니다.')); }, [projectId]);
+  const run = async () => {
+    if (!projectId || !input.trim()) { setError('AI 실행 내용을 입력해주세요.'); return; }
+    setLoading(true); setError('');
+    try {
+      const response = await AgentService.run(projectId, agentType, input.trim());
+      setResult(response.result); setRuns(response.recent_runs); await loadContext();
+      window.dispatchEvent(new Event('proflow:agent-run'));
+    } catch { setError('AI 실행에 실패했습니다.'); }
+    finally { setLoading(false); }
+  };
+  return <Card className="mb-3 p-4"><div className="text-xs font-semibold text-emerald-700">Planning Context 사용 중</div><div className="mt-2 grid gap-1 md:grid-cols-3">{(['requirement', 'wbs', 'api_design', 'database_design'] as AgentType[]).map((type) => <div key={type} className="truncate rounded bg-emerald-50 p-2 text-xs">{type}: {context?.agents[type]?.summary ?? '없음'}</div>)}</div><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="Agent에게 요청할 내용을 입력하세요." className="mt-3 min-h-20 w-full rounded-md border border-slate-200 p-3 text-sm" /><div className="mt-2 flex justify-end"><button disabled={loading} onClick={run} className="rounded-md bg-[#0b66e4] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{loading ? '실행 중...' : 'AI 실행'}</button></div>{error && <div className="mt-2 text-xs text-red-700">{error}</div>}{result && <div className="mt-3 whitespace-pre-wrap rounded bg-blue-50 p-3 text-sm">{result}</div>}{!!runs.length && <div className="mt-3 space-y-1"><b className="text-xs">최근 실행 결과</b>{runs.map((item) => <div key={item.id} className="line-clamp-2 rounded border p-2 text-xs">{item.result}</div>)}</div>}</Card>;
 }
 
 function CodeArea({ value, onChange, readOnly = false }: { value: string; onChange?: (value: string) => void; readOnly?: boolean }) {

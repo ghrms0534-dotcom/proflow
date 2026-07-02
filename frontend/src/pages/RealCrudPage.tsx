@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AgentService, ProjectService } from '../services/projectService';
-import type { AgentRun, PlanningAgentType, ProjectAgentContext } from '../services/projectService';
+import type { AgentRun, AgentType, ProjectAgentContext } from '../services/projectService';
 import { useAppStore } from '../store';
 import { Card, PageShell, StatusBadge } from './SectionUi';
 
@@ -56,7 +56,7 @@ export function RealCrudPage({ resource }: { resource: RealResource }) {
   const [recentRuns, setRecentRuns] = useState<AgentRun[]>([]);
   const [projectContext, setProjectContext] = useState<ProjectAgentContext | null>(null);
   const [contextError, setContextError] = useState('');
-  const agentType = ({ requirements: 'requirement', schedules: 'schedule', wbs: 'wbs', uiDesigns: 'ui_design', databaseDesigns: 'database_design', apiDesigns: 'api_design' } as Partial<Record<RealResource, PlanningAgentType>>)[resource];
+  const agentType = ({ requirements: 'requirement', schedules: 'schedule', wbs: 'wbs', uiDesigns: 'ui_design', databaseDesigns: 'database_design', apiDesigns: 'api_design', developmentTasks: 'development', codeReviews: 'code_review', unitTests: 'unit_test', integrationTests: 'integration_test' } as Partial<Record<RealResource, AgentType>>)[resource];
 
   const loadContext = useCallback(async () => {
     if (!projectId || !agentType) return;
@@ -110,9 +110,9 @@ export function RealCrudPage({ resource }: { resource: RealResource }) {
   return <PageShell title={config.title} subtitle="현재 프로젝트의 SQLite 업무 데이터를 조회하고 관리합니다." showAgent={false}>
     {agentType && <Card className="mb-3 p-4">
       <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 p-3">
-        <div className="text-xs font-semibold text-emerald-800">현재 프로젝트 컨텍스트 사용</div>
+        <div className="text-xs font-semibold text-emerald-800">{agentType && ['development', 'code_review', 'unit_test', 'integration_test'].includes(agentType) ? 'Planning Context 사용 중' : '현재 프로젝트 컨텍스트 사용'}</div>
         {contextError && <div className="mt-2 text-xs text-red-700">{contextError}</div>}
-        <div className="mt-2 grid gap-2 md:grid-cols-3">{(['requirement', 'schedule', 'wbs', 'ui_design', 'database_design', 'api_design'] as PlanningAgentType[]).map((type) => <div key={type} className="rounded bg-white/80 p-2"><div className="text-[10px] font-semibold uppercase text-[#64748B]">{type}</div><div className="mt-1 line-clamp-2 text-xs text-[#334155]">{projectContext?.agents[type]?.summary ?? '실행 결과 없음'}</div></div>)}</div>
+        <div className="mt-2 grid gap-2 md:grid-cols-3">{(['requirement', 'schedule', 'wbs', 'ui_design', 'database_design', 'api_design'] as AgentType[]).map((type) => <div key={type} className="rounded bg-white/80 p-2"><div className="text-[10px] font-semibold uppercase text-[#64748B]">{type}</div><div className="mt-1 line-clamp-2 text-xs text-[#334155]">{projectContext?.agents[type]?.summary ?? '실행 결과 없음'}</div></div>)}</div>
       </div>
       <h2 className="text-sm font-semibold text-[#0b1f44]">AI 실행</h2>
       <textarea value={aiInput} onChange={(event) => setAiInput(event.target.value)} placeholder="Agent에게 요청할 내용을 입력하세요." className="mt-2 min-h-24 w-full rounded-md border border-slate-200 p-3 text-sm outline-none focus:border-[#0b66e4]" />
