@@ -6,9 +6,9 @@ from fastapi.security import OAuth2PasswordBearer
 from app.common import database
 from app.common.exceptions import AgentNotFoundError, ProjectAccessError
 from app.core import auth
-from app.schemas.agent import AgentChatRequest, AgentChatResponse
+from app.schemas.agent import AgentChatRequest, AgentChatResponse, AgentRunRequest, AgentRunResponse
 from app.services.agent_definition_service import get_agent, list_agents
-from app.services.agent_run_service import chat
+from app.services.agent_run_service import chat, run_agent
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 catalog_router = APIRouter(prefix="/agents", tags=["Agent"])
@@ -35,6 +35,16 @@ def agent_detail(agent_key: str):
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"agent": agent}
+
+
+@catalog_router.post("/run", response_model=AgentRunResponse)
+def run(payload: AgentRunRequest, user_id: int | None = Depends(optional_user_id)):
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    try:
+        return run_agent(payload, user_id)
+    except ProjectAccessError as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
 
 
 @router.post("/chat", response_model=AgentChatResponse)

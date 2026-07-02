@@ -32,6 +32,30 @@ class AgentRunServiceTest(unittest.TestCase):
         with patch.dict("os.environ", {"TEST_LLM_TIMEOUT": "invalid"}):
             self.assertEqual(config._positive_int("TEST_LLM_TIMEOUT", 60), 60)
 
+    def test_planning_agent_run_uses_prompts_and_saves_history(self):
+        with TestClient(app) as client:
+            login = client.post("/api/auth/login", json={"email": "demo@example.com", "password": "1234"})
+            headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+            prompts = {
+                "requirement": "acceptance criteria", "schedule": "milestone", "wbs": "선후행 관계",
+                "ui_design": "사용자 흐름", "database_design": "제약조건", "api_design": "validation",
+            }
+            with patch("app.services.agent_run_service.generate", return_value=llm_service.LlmResult("AI result", "mock", "qwen2.5:3b", False)) as generate:
+                for agent_type, expected in prompts.items():
+                    response = client.post("/api/agents/run", headers=headers, json={
+                        "project_id": 1, "agent_type": agent_type, "user_input": "초안을 작성해줘", "context": {"source": "test"},
+                    })
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertIn(expected, generate.call_args.args[0])
+
+            result = response.json()
+            self.assertEqual(result["agent_type"], "api_design")
+            self.assertEqual(result["result"], "AI result")
+            self.assertLessEqual(len(result["recent_runs"]), 5)
+            with closing(database.connect()) as db:
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id = 1 AND agent_name IN ('requirement','schedule','wbs','ui_design','database_design','api_design')").fetchone()[0], 6)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM activity_logs WHERE project_id = 1 AND message LIKE '%Agent AI%'").fetchone()[0], 6)
+
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_development_agent_returns_mock_response(self):
         result = chat(AgentChatRequest(message="Review auth.py", context={"file": "auth.py"}))

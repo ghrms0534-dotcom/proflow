@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ProjectService } from '../services/projectService';
+import { AgentService, ProjectService } from '../services/projectService';
+import type { AgentRun, PlanningAgentType } from '../services/projectService';
 import { useAppStore } from '../store';
 import { Card, PageShell, StatusBadge } from './SectionUi';
 
@@ -48,6 +49,12 @@ export function RealCrudPage({ resource }: { resource: RealResource }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [aiResult, setAiResult] = useState('');
+  const [recentRuns, setRecentRuns] = useState<AgentRun[]>([]);
+  const agentType = ({ requirements: 'requirement', schedules: 'schedule', wbs: 'wbs', uiDesigns: 'ui_design', databaseDesigns: 'database_design', apiDesigns: 'api_design' } as Partial<Record<RealResource, PlanningAgentType>>)[resource];
 
   const load = useCallback(async () => {
     if (!projectId) { setLoading(false); return; }
@@ -80,7 +87,25 @@ export function RealCrudPage({ resource }: { resource: RealResource }) {
     try { await api.update(projectId, row.id, { status: 'completed' }); await load(); } catch { setError('상태 변경에 실패했습니다.'); }
   };
 
+  const runAi = async () => {
+    if (!projectId || !agentType || !aiInput.trim()) { setAiError('AI 실행 내용을 입력해주세요.'); return; }
+    setAiLoading(true); setAiError('');
+    try {
+      const response = await AgentService.run(projectId, agentType, aiInput.trim(), { items: rows.slice(0, 20) });
+      setAiResult(response.result); setRecentRuns(response.recent_runs);
+    } catch { setAiError('AI 실행에 실패했습니다. Ollama와 Backend 상태를 확인해주세요.'); }
+    finally { setAiLoading(false); }
+  };
+
   return <PageShell title={config.title} subtitle="현재 프로젝트의 SQLite 업무 데이터를 조회하고 관리합니다." showAgent={false}>
+    {agentType && <Card className="mb-3 p-4">
+      <h2 className="text-sm font-semibold text-[#0b1f44]">AI 실행</h2>
+      <textarea value={aiInput} onChange={(event) => setAiInput(event.target.value)} placeholder="Agent에게 요청할 내용을 입력하세요." className="mt-2 min-h-24 w-full rounded-md border border-slate-200 p-3 text-sm outline-none focus:border-[#0b66e4]" />
+      <div className="mt-2 flex justify-end"><button disabled={aiLoading} onClick={runAi} className="rounded-md bg-[#0b66e4] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{aiLoading ? '실행 중...' : 'AI 실행'}</button></div>
+      {aiError && <div className="mt-3 rounded-md bg-red-50 p-3 text-xs text-red-700">{aiError}</div>}
+      {aiResult && <div className="mt-3 whitespace-pre-wrap rounded-md border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-[#334155]">{aiResult}</div>}
+      {!!recentRuns.length && <div className="mt-4"><h3 className="text-xs font-semibold text-[#334155]">최근 실행 결과</h3><div className="mt-2 space-y-2">{recentRuns.map((run) => <div key={run.id} className="rounded-md border border-slate-200 p-3"><div className="text-[10px] text-[#64748B]">{run.created_at} · {run.model}</div><div className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-[#334155]">{run.result}</div></div>)}</div></div>}
+    </Card>}
     <Card className="mb-3 p-4">
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">{fields.map((field) => <label key={field.name} className="text-xs font-semibold text-[#334155]">{field.label}<input type={field.type ?? 'text'} value={form[field.name] ?? ''} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} className="mt-1 h-9 w-full rounded-md border border-slate-200 px-2 font-normal outline-none focus:border-[#0b66e4]" /></label>)}</div>
       <div className="mt-3 flex justify-end gap-2"><button onClick={() => { setEditingId(null); setForm(emptyForm(fields)); }} className="rounded-md border border-slate-300 px-3 py-2 text-xs">초기화</button><button disabled={saving} onClick={save} className="rounded-md bg-[#0b66e4] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? '저장 중' : editingId === null ? '신규 등록' : '수정 저장'}</button></div>

@@ -2,30 +2,35 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-DevelopmentAgentName = Literal[
-    "development",
-    "source_control",
-    "unit_test",
-    "integration_test",
-    "code_review",
-    "deployment_ready",
-]
+PlanningAgentType = Literal["requirement", "schedule", "wbs", "ui_design", "database_design", "api_design"]
+
+
 class AgentRunRequest(BaseModel):
-    agent: DevelopmentAgentName = "development"
-    action: str = "analyze"
-    prompt: str = "Analyze the current development task."
+    project_id: int = Field(gt=0)
+    agent_type: PlanningAgentType
+    user_input: str = Field(min_length=1, max_length=10000)
     context: dict[str, Any] = Field(default_factory=dict)
 
 
+class AgentRunSummary(BaseModel):
+    id: int
+    agent_type: str
+    result: str
+    provider: str
+    model: str
+    fallback: bool
+    created_at: str
+
+
 class AgentRunResponse(BaseModel):
-    agent: str
-    action: str
+    run_id: int
+    agent_type: PlanningAgentType
     status: str
     result: str
     provider: str
     model: str
     fallback: bool
-    context: dict[str, Any]
+    recent_runs: list[AgentRunSummary]
 
 
 class AgentChatRequest(BaseModel):

@@ -1,5 +1,14 @@
 import api from './api';
 
+export type PlanningAgentType = 'requirement' | 'schedule' | 'wbs' | 'ui_design' | 'database_design' | 'api_design';
+export type AgentRun = { id: number; agent_type: PlanningAgentType; result: string; provider: string; model: string; fallback: boolean; created_at: string };
+export type AgentRunResponse = { run_id: number; agent_type: PlanningAgentType; status: string; result: string; provider: string; model: string; fallback: boolean; recent_runs: AgentRun[] };
+
+export const AgentService = {
+  run: (projectId: number | string, agentType: PlanningAgentType, userInput: string, context: Record<string, unknown> = {}) =>
+    api.post<AgentRunResponse>('/agents/run', { project_id: Number(projectId), agent_type: agentType, user_input: userInput, context }).then(({ data }) => data),
+};
+
 export type RequirementInput = { requirement_key: string; title: string; status?: string; priority?: string; owner?: string };
 export type DevelopmentTaskInput = { task_key: string; title: string; status?: string; priority?: string; owner?: string };
 export type QualityResultInput = { result_key: string; title: string; status?: string; score?: number; risk_level?: string };

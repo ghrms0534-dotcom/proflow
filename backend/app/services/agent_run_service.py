@@ -23,23 +23,47 @@ DEVELOPMENT_AGENTS = {
     "deployment_ready": DeploymentReadyAgent,
 }
 
+PLANNING_PROMPTS = {
+    "requirement": "요구사항을 정리하고 기능 요구사항, 비기능 요구사항, acceptance criteria를 구분해 작성하세요.",
+    "schedule": "실행 가능한 일정 초안과 milestone, 일정 risk 및 대응 방안을 작성하세요.",
+    "wbs": "작업분해구조(WBS)를 만들고 각 작업의 담당 역할과 선후행 관계를 작성하세요.",
+    "ui_design": "화면 구성, 주요 UI 컴포넌트와 사용자 흐름을 작성하세요.",
+    "database_design": "테이블 후보, 주요 컬럼, 관계와 제약조건을 작성하세요.",
+    "api_design": "endpoint, HTTP method, request/response와 validation 규칙을 작성하세요.",
+}
 
-def run_agent(payload: AgentRunRequest) -> AgentRunResponse:
-    agent_type = DEVELOPMENT_AGENTS.get(payload.agent)
-    if not agent_type:
-        raise AgentNotFoundError(payload.agent)
 
-    agent = agent_type()
-    llm = generate(f"[{agent.name}] {payload.action}: {payload.prompt}\nContext: {payload.context}")
+def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
+    with closing(database.connect()) as db:
+        if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (payload.project_id, user_id)).fetchone():
+            raise ProjectAccessError("Project access denied")
+
+    prompt = f"{PLANNING_PROMPTS[payload.agent_type]}\n\n사용자 요청:\n{payload.user_input}\n\n추가 컨텍스트:\n{payload.context}"
+    llm = generate(prompt)
+    status = "fallback" if llm.fallback else "success"
+    with closing(database.connect()) as db:
+        cursor = db.execute(
+            """
+            INSERT INTO agent_runs
+            (project_id, agent_name, request_json, response_json, provider, model, mock, fallback, input_prompt, output_result, status)
+            VALUES (?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (payload.project_id, payload.agent_type, payload.model_dump_json(), llm.provider, llm.model,
+             llm.provider == "mock", llm.fallback, prompt, llm.text, status),
+        )
+        db.execute("INSERT INTO activity_logs (project_id, message, type) VALUES (?, ?, 'Agent')",
+                   (payload.project_id, f"{payload.agent_type} Agent AI 실행"))
+        db.commit()
+        rows = db.execute(
+            "SELECT id, agent_name, output_result, provider, model, fallback, created_at FROM agent_runs WHERE project_id = ? AND agent_name = ? ORDER BY id DESC LIMIT 5",
+            (payload.project_id, payload.agent_type),
+        ).fetchall()
     return AgentRunResponse(
-        agent=agent.name,
-        action=payload.action,
-        status="completed",
-        result=llm.text,
-        provider=llm.provider,
-        model=llm.model,
-        fallback=llm.fallback,
-        context=payload.context,
+        run_id=cursor.lastrowid, agent_type=payload.agent_type, status=status, result=llm.text,
+        provider=llm.provider, model=llm.model, fallback=llm.fallback,
+        recent_runs=[{"id": row["id"], "agent_type": row["agent_name"], "result": row["output_result"],
+                      "provider": row["provider"], "model": row["model"], "fallback": bool(row["fallback"]),
+                      "created_at": row["created_at"]} for row in rows],
     )
 
 
