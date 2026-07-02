@@ -1,3 +1,4 @@
+import json
 from contextlib import closing
 
 from app.agents.development_execution.code_review_agent import CodeReviewAgent
@@ -10,7 +11,7 @@ from app.agents.project_control.project_control_agent import ProjectControlAgent
 from app.common import database
 from app.common.config import LLM_REQUEST_TIMEOUT, OLLAMA_MODEL, USE_REAL_LLM
 from app.common.exceptions import AgentNotFoundError, ProjectAccessError
-from app.schemas.agent import AgentChatRequest, AgentChatResponse, AgentRunRequest, AgentRunResponse
+from app.schemas.agent import AgentChatRequest, AgentChatResponse, AgentRunRequest, AgentRunResponse, OrchestrationRequest, OrchestrationResponse
 from app.services.llm_service import generate
 from app.services.agent_definition_service import get_agent
 
@@ -58,6 +59,10 @@ DEVELOPMENT_AGENT_TYPES = tuple(DEVELOPMENT_PROMPTS)
 DELIVERY_AGENT_TYPES = tuple(DELIVERY_PROMPTS)
 SYSTEM_AGENT_TYPES = tuple(SYSTEM_PROMPTS)
 ALL_AGENT_TYPES = (*PLANNING_AGENT_TYPES, *DEVELOPMENT_AGENT_TYPES, *DELIVERY_AGENT_TYPES, *SYSTEM_AGENT_TYPES)
+DEFAULT_ORCHESTRATION_PLAN = (
+    "requirement", "schedule", "wbs", "ui_design", "database_design", "api_design", "development",
+    "unit_test", "integration_test", "quality", "defect", "document", "delivery_output",
+)
 CONTEXT_DEPENDENCIES = {
     "requirement": (),
     "schedule": ("requirement",),
@@ -156,6 +161,71 @@ def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
                       "provider": row["provider"], "model": row["model"], "fallback": bool(row["fallback"]),
                       "created_at": row["created_at"]} for row in rows],
     )
+
+
+def orchestrate(payload: OrchestrationRequest, user_id: int) -> OrchestrationResponse:
+    get_agent_context(payload.project_id, user_id)
+    plan = list(payload.plan or DEFAULT_ORCHESTRATION_PLAN)
+    steps = [{"agent_type": agent_type, "status": "pending", "result": "", "run_id": None} for agent_type in plan]
+    with closing(database.connect()) as db:
+        cursor = db.execute(
+            "INSERT INTO orchestration_runs (project_id, user_input, plan_json, steps_json, continue_on_failure) VALUES (?, ?, ?, ?, ?)",
+            (payload.project_id, payload.user_input, json.dumps(plan), json.dumps(steps), payload.continue_on_failure),
+        )
+        db.commit()
+        orchestration_id = cursor.lastrowid
+
+    previous_results = {}
+    failed_steps = []
+    for step in steps:
+        step["status"] = "running"
+        _save_orchestration(orchestration_id, steps, failed_steps, "running")
+        try:
+            result = run_agent(AgentRunRequest(project_id=payload.project_id, agent_type=step["agent_type"],
+                                               user_input=payload.user_input, context={"orchestration_results": previous_results}), user_id)
+            step.update(status="failed" if result.fallback else "completed", result=result.result, run_id=result.run_id)
+            previous_results[step["agent_type"]] = result.result[:500]
+            if result.fallback:
+                failed_steps.append(step["agent_type"])
+        except Exception as error:
+            step.update(status="failed", result=str(error))
+            failed_steps.append(step["agent_type"])
+        if failed_steps and not payload.continue_on_failure:
+            break
+
+    status = "completed_with_errors" if failed_steps else "completed"
+    _save_orchestration(orchestration_id, steps, failed_steps, status, complete=True)
+    with closing(database.connect()) as db:
+        db.execute("INSERT INTO activity_logs (project_id, message, type) VALUES (?, ?, 'Agent')",
+                   (payload.project_id, f"Project Control orchestration {status}: #{orchestration_id}"))
+        db.commit()
+    return get_orchestration(orchestration_id)
+
+
+def _save_orchestration(run_id: int, steps: list[dict], failed_steps: list[str], status: str, complete: bool = False) -> None:
+    with closing(database.connect()) as db:
+        db.execute(f"UPDATE orchestration_runs SET steps_json = ?, failed_steps_json = ?, status = ?{', completed_at = CURRENT_TIMESTAMP' if complete else ''} WHERE id = ?",
+                   (json.dumps(steps, ensure_ascii=False), json.dumps(failed_steps), status, run_id))
+        db.commit()
+
+
+def get_orchestration(run_id: int) -> OrchestrationResponse:
+    with closing(database.connect()) as db:
+        row = db.execute("SELECT * FROM orchestration_runs WHERE id = ?", (run_id,)).fetchone()
+    return OrchestrationResponse(id=row["id"], project_id=row["project_id"], status=row["status"],
+                                 steps=json.loads(row["steps_json"]), failed_steps=json.loads(row["failed_steps_json"]),
+                                 created_at=row["created_at"], completed_at=row["completed_at"])
+
+
+def get_latest_orchestration(project_id: int) -> dict:
+    with closing(database.connect()) as db:
+        row = db.execute("SELECT * FROM orchestration_runs WHERE project_id = ? ORDER BY id DESC LIMIT 1", (project_id,)).fetchone()
+    if not row:
+        return {"id": None, "status": "idle", "completed_steps": 0, "total_steps": 0, "failed_steps": [], "last_run_at": None}
+    steps = json.loads(row["steps_json"])
+    return {"id": row["id"], "status": row["status"], "completed_steps": sum(step["status"] == "completed" for step in steps),
+            "total_steps": len(steps), "failed_steps": json.loads(row["failed_steps_json"]),
+            "last_run_at": row["completed_at"] or row["created_at"]}
 
 
 def chat(payload: AgentChatRequest, user_id: int | None = None) -> AgentChatResponse:

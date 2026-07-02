@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app import schemas
 from app.api.auth_routes import get_current_user
 from app.common import database
-from app.services.agent_run_service import get_agent_context
+from app.services.agent_run_service import get_agent_context, get_latest_orchestration
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 DONE = {"approved", "completed", "done", "closed", "passed"}
@@ -71,6 +71,7 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
             "delivery_agent": agent_context["delivery"],
             "lifecycle": agent_context["lifecycle"],
             "system_agent": agent_context["system"],
+            "orchestration": get_latest_orchestration(project_id),
         }
 
 

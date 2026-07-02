@@ -145,6 +145,32 @@ class AgentRunServiceTest(unittest.TestCase):
             self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], users_before)
             self.assertEqual(dict(db.execute("SELECT * FROM projects WHERE id = 1").fetchone()), project_before)
 
+    def test_project_control_orchestration_tracks_steps_and_continues_after_failure(self):
+        with TestClient(app) as client:
+            login = client.post("/api/auth/login", json={"email": "demo@example.com", "password": "1234"})
+            headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+            llm_result = llm_service.LlmResult("step result", "mock", "qwen2.5:3b", False)
+            with patch("app.services.agent_run_service.generate", side_effect=[llm_result, RuntimeError("schedule failed"), llm_result]) as generate:
+                response = client.post("/api/project-control/orchestrate", headers=headers, json={
+                    "project_id": 1, "user_input": "자동 실행", "plan": ["requirement", "schedule", "wbs"], "continue_on_failure": True,
+                })
+            self.assertEqual(response.status_code, 200, response.text)
+            body = response.json()
+            self.assertEqual(body["status"], "completed_with_errors")
+            self.assertEqual([step["status"] for step in body["steps"]], ["completed", "failed", "completed"])
+            self.assertEqual(body["failed_steps"], ["schedule"])
+            self.assertIn("requirement", generate.call_args_list[1].args[0])
+            self.assertIn("orchestration_results", generate.call_args_list[2].args[0])
+            dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
+            self.assertEqual(dashboard["orchestration"]["id"], body["id"])
+            self.assertEqual(dashboard["orchestration"]["failed_steps"], ["schedule"])
+
+            with patch("app.services.agent_run_service.generate", side_effect=RuntimeError("stop")):
+                stopped = client.post("/api/project-control/orchestrate", headers=headers, json={
+                    "project_id": 1, "user_input": "중단 실행", "plan": ["requirement", "schedule"], "continue_on_failure": False,
+                }).json()
+            self.assertEqual([step["status"] for step in stopped["steps"]], ["failed", "pending"])
+
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_development_agent_returns_mock_response(self):
         result = chat(AgentChatRequest(message="Review auth.py", context={"file": "auth.py"}))

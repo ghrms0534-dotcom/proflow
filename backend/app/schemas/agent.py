@@ -38,6 +38,30 @@ class AgentRunResponse(BaseModel):
     recent_runs: list[AgentRunSummary]
 
 
+class OrchestrationRequest(BaseModel):
+    project_id: int = Field(gt=0)
+    user_input: str = Field(min_length=1, max_length=10000)
+    plan: list[AgentType] | None = Field(default=None, min_length=1)
+    continue_on_failure: bool = True
+
+
+class OrchestrationStep(BaseModel):
+    agent_type: AgentType
+    status: Literal["pending", "running", "completed", "failed"]
+    result: str = ""
+    run_id: int | None = None
+
+
+class OrchestrationResponse(BaseModel):
+    id: int
+    project_id: int
+    status: str
+    steps: list[OrchestrationStep]
+    failed_steps: list[str]
+    created_at: str
+    completed_at: str | None = None
+
+
 class AgentChatRequest(BaseModel):
     agent: str = Field(default="development", min_length=2, max_length=64, pattern=r"^[a-z0-9_]+$")
     message: str = Field(min_length=1)

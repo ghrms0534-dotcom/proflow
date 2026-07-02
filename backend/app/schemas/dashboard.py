@@ -61,6 +61,15 @@ class PlanningAgentProgress(BaseModel):
     has_failure: bool
 
 
+class OrchestrationStatus(BaseModel):
+    id: int | None
+    status: str
+    completed_steps: int
+    total_steps: int
+    failed_steps: list[str]
+    last_run_at: str | None
+
+
 class DashboardResponse(BaseModel):
     summary: DashboardSummary
     stages: list[StageProgress]
@@ -73,3 +82,4 @@ class DashboardResponse(BaseModel):
     delivery_agent: PlanningAgentProgress
     lifecycle: PlanningAgentProgress
     system_agent: PlanningAgentProgress
+    orchestration: OrchestrationStatus

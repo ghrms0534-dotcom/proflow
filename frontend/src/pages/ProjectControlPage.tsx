@@ -4,6 +4,9 @@ import { DashboardAgent } from '../agents/dashboard/dashboardAgent';
 import type { DashboardAnalysisMode } from '../agents/dashboard/dashboardAgent.types';
 import type { AiRecommendation, DashboardData, DashboardLoadState } from '../types/dashboard';
 import type { SectionAgentState } from '../types/agentWorkspace';
+import { AgentService } from '../services/projectService';
+import type { AgentType, OrchestrationResponse } from '../services/projectService';
+import { useAppStore } from '../store';
 import { Card, InfoRow, Priority, ProgressRing, ReleaseCheckBadge, SectionHeader, StageProgress, StatusBadge } from './SectionUi';
 const dashboardActivityIcons = {
   flask: TestTube2,
@@ -12,6 +15,8 @@ const dashboardActivityIcons = {
   package: PackageCheck,
   alert: AlertTriangle,
 };
+
+const ORCHESTRATION_PLAN: AgentType[] = ['requirement', 'schedule', 'wbs', 'ui_design', 'database_design', 'api_design', 'development', 'unit_test', 'integration_test', 'quality', 'defect', 'document', 'delivery_output'];
 
 const dashboardRecommendationIcons = {
   alert: AlertTriangle,
@@ -44,11 +49,29 @@ const koreanStage = (value: string) => stageLabels[value] ?? value;
 const analysisModeLabels: Record<DashboardAnalysisMode, string> = { overview: '전체 현황', progress: '진행률', stageProgress: '단계별 진행률', taskStatus: '작업 상태', recentActivity: '최근 업무 처리 내역', recommendation: '추천 분석' };
 
 export function ProjectControlPage({ data, loadState, error, sectionAgents, onSelectSection }: { data: DashboardData | null; loadState: DashboardLoadState; error: string | null; sectionAgents: SectionAgentState[]; onSelectSection: (menu: string) => void }) {
+  const projectId = useAppStore((state) => state.currentProjectId);
   const [detail, setDetail] = useState<'overall' | 'stages' | 'tasks' | 'activities' | 'recommendations' | null>(null);
   const [recommendationIndex, setRecommendationIndex] = useState(0);
   const [recommendationListMode, setRecommendationListMode] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [orchestrationInput, setOrchestrationInput] = useState('');
+  const [orchestrationLoading, setOrchestrationLoading] = useState(false);
+  const [orchestrationError, setOrchestrationError] = useState('');
+  const [orchestrationResult, setOrchestrationResult] = useState<OrchestrationResponse | null>(null);
+  const [activePlan, setActivePlan] = useState<AgentType[]>([]);
+  const [continueOnFailure, setContinueOnFailure] = useState(true);
   if (!data) return <main className="flex flex-1 items-center justify-center text-sm text-slate-500">{loadState === 'loading' ? '불러오는 중...' : '대시보드 임시 데이터를 준비 중입니다.'}</main>;
+
+  const runOrchestration = async (plan?: AgentType[]) => {
+    if (!projectId || !orchestrationInput.trim()) { setOrchestrationError('자동 실행 요청을 입력해주세요.'); return; }
+    const selectedPlan = plan ?? ORCHESTRATION_PLAN;
+    setActivePlan(selectedPlan); setOrchestrationLoading(true); setOrchestrationError(''); setOrchestrationResult(null);
+    try {
+      setOrchestrationResult(await AgentService.orchestrate(projectId, orchestrationInput.trim(), plan, continueOnFailure));
+      window.dispatchEvent(new Event('proflow:agent-run'));
+    } catch { setOrchestrationError('자동 실행에 실패했습니다.'); }
+    finally { setOrchestrationLoading(false); }
+  };
 
   const stageStats = [
     { title: `1. ${koreanStage(data.stages[0]?.name ?? '분석 · 설계')}`, progress: data.stages[0]?.progress ?? 72, completed: data.stages[0]?.completed ?? 28, progressCount: data.stages[0]?.inProgress ?? 7, waiting: data.stages[0]?.waiting ?? 4, color: 'bg-[#0b66e4]', text: 'text-[#0b66e4]' },
@@ -77,6 +100,14 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
             {error}. mock 데이터로 대시보드를 표시합니다.
           </div>
         )}
+
+        <Card className="mb-3 p-3">
+          <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">Project Control 전체 자동 실행</h2><p className="mt-1 text-xs text-[#64748B]">Agent를 순서대로 실행하고 각 결과를 다음 단계 context로 전달합니다.</p></div><div className="text-right text-[10px] text-[#64748B]">최근 상태: {data.orchestration.status}<br />마지막 실행: {data.orchestration.lastRunAt?.replace('T', ' ').slice(0, 16) ?? '-'}</div></div>
+          <textarea value={orchestrationInput} onChange={(event) => setOrchestrationInput(event.target.value)} placeholder="프로젝트 전체에 적용할 요청을 입력하세요." className="mt-3 min-h-20 w-full rounded border border-slate-200 p-3 text-sm" />
+          <div className="mt-2 flex flex-wrap items-center gap-2"><button disabled={orchestrationLoading} onClick={() => void runOrchestration()} className="rounded bg-[#0b66e4] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">전체 실행</button><button disabled={orchestrationLoading} onClick={() => void runOrchestration(ORCHESTRATION_PLAN.slice(0, 6))} className="rounded border px-3 py-2 text-xs">Planning만 실행</button><button disabled={orchestrationLoading} onClick={() => void runOrchestration(ORCHESTRATION_PLAN.slice(0, 9))} className="rounded border px-3 py-2 text-xs">Development까지 실행</button><button disabled={orchestrationLoading} onClick={() => void runOrchestration(ORCHESTRATION_PLAN)} className="rounded border px-3 py-2 text-xs">Delivery까지 실행</button><label className="ml-auto text-xs"><input type="checkbox" checked={continueOnFailure} onChange={(event) => setContinueOnFailure(event.target.checked)} className="mr-1" />실패 후 계속</label></div>
+          {orchestrationError && <div className="mt-2 text-xs text-red-700">{orchestrationError}</div>}
+          {(orchestrationLoading || orchestrationResult) && <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{(orchestrationResult?.steps ?? activePlan.map((agent_type, index) => ({ agent_type, status: index === 0 ? 'running' as const : 'pending' as const, result: '', run_id: null }))).map((step) => <div key={step.agent_type} className={`rounded border p-2 text-xs ${step.status === 'failed' ? 'border-red-200 bg-red-50' : step.status === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200'}`}><div className="flex justify-between font-semibold"><span>{step.agent_type}</span><span>{step.status}</span></div>{step.result && <div className="mt-1 line-clamp-2 text-[#64748B]">{step.result}</div>}</div>)}</div>}
+        </Card>
 
         <Card className="mb-3 p-3">
           <div className="flex items-start justify-between gap-3">

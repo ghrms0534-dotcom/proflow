@@ -262,6 +262,18 @@ def init_db() -> None:
                 status TEXT NOT NULL DEFAULT 'success',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS orchestration_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id),
+                user_input TEXT NOT NULL,
+                plan_json TEXT NOT NULL,
+                steps_json TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'running',
+                continue_on_failure INTEGER NOT NULL DEFAULT 1,
+                failed_steps_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                completed_at TEXT
+            );
             """
         )
         columns = {row[1] for row in db.execute("PRAGMA table_info(agent_runs)").fetchall()}

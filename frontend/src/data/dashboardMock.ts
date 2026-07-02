@@ -47,4 +47,5 @@ export const mockDashboard: DashboardData = {
   deliveryAgent: { completedCount: 0, totalCount: 4, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   lifecycle: { completedCount: 0, totalCount: 19, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   systemAgent: { completedCount: 0, totalCount: 3, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
+  orchestration: { id: null, status: 'idle', completedSteps: 0, totalSteps: 0, failedSteps: [], lastRunAt: null },
 };

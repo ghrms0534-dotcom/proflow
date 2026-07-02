@@ -3,6 +3,8 @@ import api from './api';
 export type AgentType = 'requirement' | 'schedule' | 'wbs' | 'ui_design' | 'database_design' | 'api_design' | 'development' | 'configuration' | 'source_management' | 'code_review' | 'unit_test' | 'integration_test' | 'quality' | 'defect' | 'document' | 'delivery_output' | 'access_control' | 'model_config' | 'project_config';
 export type AgentRun = { id: number; agent_type: AgentType; result: string; provider: string; model: string; fallback: boolean; created_at: string };
 export type AgentRunResponse = { run_id: number; agent_type: AgentType; status: string; result: string; provider: string; model: string; fallback: boolean; recent_runs: AgentRun[] };
+export type OrchestrationStep = { agent_type: AgentType; status: 'pending' | 'running' | 'completed' | 'failed'; result: string; run_id: number | null };
+export type OrchestrationResponse = { id: number; project_id: number; status: string; steps: OrchestrationStep[]; failed_steps: string[]; created_at: string; completed_at: string | null };
 export type ProjectAgentContext = {
   project_id: number;
   project: Record<string, unknown>;
@@ -20,6 +22,8 @@ export const AgentService = {
   run: (projectId: number | string, agentType: AgentType, userInput: string, context: Record<string, unknown> = {}) =>
     api.post<AgentRunResponse>('/agents/run', { project_id: Number(projectId), agent_type: agentType, user_input: userInput, context }).then(({ data }) => data),
   getContext: (projectId: number | string) => api.get<ProjectAgentContext>(`/projects/${projectId}/agent-context`).then(({ data }) => data),
+  orchestrate: (projectId: number | string, userInput: string, plan?: AgentType[], continueOnFailure = true) =>
+    api.post<OrchestrationResponse>('/project-control/orchestrate', { project_id: Number(projectId), user_input: userInput, plan, continue_on_failure: continueOnFailure }).then(({ data }) => data),
 };
 
 export type RequirementInput = { requirement_key: string; title: string; status?: string; priority?: string; owner?: string };

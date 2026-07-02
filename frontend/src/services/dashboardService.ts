@@ -46,6 +46,7 @@ type BackendDashboard = {
   delivery_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
   lifecycle?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
   system_agent?: { completed_count: number; total_count: number; progress: number; latest_agent: string | null; last_run_at: string | null; has_failure: boolean };
+  orchestration?: { id: number | null; status: string; completed_steps: number; total_steps: number; failed_steps: string[]; last_run_at: string | null };
 };
 
 function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardData {
@@ -129,6 +130,14 @@ function normalizeDashboard(data: DashboardData | BackendDashboard): DashboardDa
       latestAgent: data.system_agent?.latest_agent ?? null,
       lastRunAt: data.system_agent?.last_run_at ?? null,
       hasFailure: data.system_agent?.has_failure ?? false,
+    },
+    orchestration: {
+      id: data.orchestration?.id ?? null,
+      status: data.orchestration?.status ?? 'idle',
+      completedSteps: data.orchestration?.completed_steps ?? 0,
+      totalSteps: data.orchestration?.total_steps ?? 0,
+      failedSteps: data.orchestration?.failed_steps ?? [],
+      lastRunAt: data.orchestration?.last_run_at ?? null,
     },
   };
 }
