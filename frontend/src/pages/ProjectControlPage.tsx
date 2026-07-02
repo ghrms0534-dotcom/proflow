@@ -96,6 +96,7 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
                   {agent.agentName === 'Planning Analysis Agent' && data?.planningAgent && <div className={`mt-2 rounded p-2 text-[10px] ${data.planningAgent.hasFailure ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>최근 Agent: {data.planningAgent.latestAgent ?? '-'}<br />마지막 실행: {data.planningAgent.lastRunAt?.replace('T', ' ').slice(0, 16) ?? '-'}<br />실패 상태: {data.planningAgent.hasFailure ? '있음' : '없음'}</div>}
                   {agent.agentName === 'Development Execution Agent' && data?.developmentAgent && <div className={`mt-2 rounded p-2 text-[10px] ${data.developmentAgent.hasFailure ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>최근 Agent: {data.developmentAgent.latestAgent ?? '-'}<br />마지막 실행: {data.developmentAgent.lastRunAt?.replace('T', ' ').slice(0, 16) ?? '-'}<br />실패 상태: {data.developmentAgent.hasFailure ? '있음' : '없음'}</div>}
                   {agent.agentName === 'Quality Verification Agent' && data?.deliveryAgent && <div className={`mt-2 rounded p-2 text-[10px] ${data.deliveryAgent.hasFailure ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>최근 Agent: {data.deliveryAgent.latestAgent ?? '-'}<br />마지막 실행: {data.deliveryAgent.lastRunAt?.replace('T', ' ').slice(0, 16) ?? '-'}<br />실패 상태: {data.deliveryAgent.hasFailure ? '있음' : '없음'}</div>}
+                  {agent.agentName === 'System Control Agent' && data?.systemAgent && <div className={`mt-2 rounded p-2 text-[10px] ${data.systemAgent.hasFailure ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>최근 Agent: {data.systemAgent.latestAgent ?? '-'}<br />마지막 실행: {data.systemAgent.lastRunAt?.replace('T', ' ').slice(0, 16) ?? '-'}<br />실패 상태: {data.systemAgent.hasFailure ? '있음' : '없음'}</div>}
                   <div className="mt-2 grid grid-cols-2 gap-y-1 text-[11px] text-[#64748B]"><span>진행률</span><b className="text-right text-[#0b1f44]">{agent.progress}%</b><span>상태</span><b className="text-right text-[#0b1f44]">{koreanStatus(agent.status)}</b><span>최근 작업</span><b className="text-right text-[#0b1f44]">{agent.recentTasks}건</b></div>
                 </button>
               );
@@ -103,7 +104,7 @@ export function ProjectControlPage({ data, loadState, error, sectionAgents, onSe
           </div>
           <div className="mt-2.5 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
             {[
-              ['현재 프로젝트 상태 요약', `16개 Agent lifecycle 진행률 ${lifecycleProgress}%, 최근 작업 ${recentTaskCount}건입니다.`],
+              ['현재 프로젝트 상태 요약', `19개 Agent lifecycle 진행률 ${lifecycleProgress}%, 최근 작업 ${recentTaskCount}건입니다.`],
               ['병목 구간', `${sectionLabels[bottleneck.agentName] ?? bottleneck.section} (${bottleneck.progress}%)`],
               ['위험도', koreanStatus(projectRisk)],
               ['권장 조치', `${bottleneck.section} 미완료 작업을 우선 검토하세요.`],

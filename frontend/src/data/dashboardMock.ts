@@ -45,5 +45,6 @@ export const mockDashboard: DashboardData = {
   planningAgent: { completedCount: 0, totalCount: 6, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   developmentAgent: { completedCount: 0, totalCount: 6, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
   deliveryAgent: { completedCount: 0, totalCount: 4, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
-  lifecycle: { completedCount: 0, totalCount: 16, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
+  lifecycle: { completedCount: 0, totalCount: 19, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
+  systemAgent: { completedCount: 0, totalCount: 3, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
 };

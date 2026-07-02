@@ -1,6 +1,6 @@
 import api from './api';
 
-export type AgentType = 'requirement' | 'schedule' | 'wbs' | 'ui_design' | 'database_design' | 'api_design' | 'development' | 'configuration' | 'source_management' | 'code_review' | 'unit_test' | 'integration_test' | 'quality' | 'defect' | 'document' | 'delivery_output';
+export type AgentType = 'requirement' | 'schedule' | 'wbs' | 'ui_design' | 'database_design' | 'api_design' | 'development' | 'configuration' | 'source_management' | 'code_review' | 'unit_test' | 'integration_test' | 'quality' | 'defect' | 'document' | 'delivery_output' | 'access_control' | 'model_config' | 'project_config';
 export type AgentRun = { id: number; agent_type: AgentType; result: string; provider: string; model: string; fallback: boolean; created_at: string };
 export type AgentRunResponse = { run_id: number; agent_type: AgentType; status: string; result: string; provider: string; model: string; fallback: boolean; recent_runs: AgentRun[] };
 export type ProjectAgentContext = {
@@ -11,6 +11,8 @@ export type ProjectAgentContext = {
   development: AgentProgress;
   delivery: AgentProgress;
   lifecycle: AgentProgress;
+  system: AgentProgress;
+  settings: Record<string, unknown>;
 };
 export type AgentProgress = { completed_count: number; total_count: number; progress: number; latest_agent: AgentType | null; last_run_at: string | null; has_failure: boolean };
 

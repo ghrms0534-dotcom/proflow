@@ -78,7 +78,7 @@ class AgentRunServiceTest(unittest.TestCase):
             context = client.get("/api/projects/1/agent-context", headers=headers).json()
             self.assertEqual(context["delivery"]["completed_count"], 4)
             self.assertEqual(context["delivery"]["progress"], 100)
-            self.assertEqual(context["lifecycle"]["completed_count"], 16)
+            self.assertEqual(context["lifecycle"]["completed_count"], len(agent_run_service.ALL_AGENT_TYPES))
             self.assertEqual(context["lifecycle"]["progress"], 100)
             dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
             self.assertEqual(dashboard["delivery_agent"]["progress"], 100)
@@ -118,6 +118,32 @@ class AgentRunServiceTest(unittest.TestCase):
             with closing(database.connect()) as db:
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id = 1 AND agent_name IN ('requirement','schedule','wbs','ui_design','database_design','api_design')").fetchone()[0], runs_before + 6)
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM activity_logs WHERE project_id = 1 AND message LIKE '%lifecycle context%'").fetchone()[0], lifecycle_before + 6)
+
+    def test_system_agents_only_generate_policy_recommendations(self):
+        with closing(database.connect()) as db:
+            users_before = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            project_before = dict(db.execute("SELECT * FROM projects WHERE id = 1").fetchone())
+        with TestClient(app) as client:
+            login = client.post("/api/auth/login", json={"email": "demo@example.com", "password": "1234"})
+            headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+            prompts = {}
+            with patch("app.services.agent_run_service.generate", return_value=llm_service.LlmResult("Policy recommendation", "mock", "qwen2.5:3b", False)) as generate:
+                for agent_type in agent_run_service.SYSTEM_AGENT_TYPES:
+                    response = client.post("/api/agents/run", headers=headers, json={"project_id": 1, "agent_type": agent_type, "user_input": "점검"})
+                    self.assertEqual(response.status_code, 200, response.text)
+                    prompts[agent_type] = generate.call_args.args[0]
+                    self.assertTrue(prompts[agent_type].startswith(agent_run_service.SYSTEM_PROMPTS[agent_type]))
+
+            self.assertIn("access_summary", prompts["access_control"])
+            self.assertIn("llm_config", prompts["model_config"])
+            self.assertIn("lifecycle_summary", prompts["project_config"])
+            context = client.get("/api/projects/1/agent-context", headers=headers).json()
+            self.assertEqual(context["system"]["completed_count"], 3)
+            dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
+            self.assertEqual(dashboard["system_agent"]["progress"], 100)
+        with closing(database.connect()) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM users").fetchone()[0], users_before)
+            self.assertEqual(dict(db.execute("SELECT * FROM projects WHERE id = 1").fetchone()), project_before)
 
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_development_agent_returns_mock_response(self):

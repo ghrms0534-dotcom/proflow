@@ -8,7 +8,7 @@ from app.agents.development_execution.source_control_agent import SourceControlA
 from app.agents.development_execution.unit_test_agent import UnitTestAgent
 from app.agents.project_control.project_control_agent import ProjectControlAgent
 from app.common import database
-from app.common.config import OLLAMA_MODEL
+from app.common.config import LLM_REQUEST_TIMEOUT, OLLAMA_MODEL, USE_REAL_LLM
 from app.common.exceptions import AgentNotFoundError, ProjectAccessError
 from app.schemas.agent import AgentChatRequest, AgentChatResponse, AgentRunRequest, AgentRunResponse
 from app.services.llm_service import generate
@@ -45,13 +45,19 @@ DELIVERY_PROMPTS = {
     "document": "사용자 문서, 운영 문서와 개발 문서의 초안을 생성하세요.",
     "delivery_output": "최종 산출물 목록, 제출 상태와 릴리즈 체크리스트를 생성하세요.",
 }
-AGENT_PROMPTS = {**PLANNING_PROMPTS, **DEVELOPMENT_PROMPTS, **DELIVERY_PROMPTS}
+SYSTEM_PROMPTS = {
+    "access_control": "사용자 역할, 권한 정책과 접근 제어 점검안을 생성하세요. 실제 계정이나 권한은 변경하지 마세요.",
+    "model_config": "LLM provider, model, timeout과 context 설정을 점검하고 추천안을 생성하세요. 실제 설정은 변경하지 마세요.",
+    "project_config": "프로젝트 기본 설정, lifecycle 기준과 Agent 활성화 정책을 생성하세요. 실제 설정은 변경하지 마세요.",
+}
+AGENT_PROMPTS = {**PLANNING_PROMPTS, **DEVELOPMENT_PROMPTS, **DELIVERY_PROMPTS, **SYSTEM_PROMPTS}
 
 
 PLANNING_AGENT_TYPES = tuple(PLANNING_PROMPTS)
 DEVELOPMENT_AGENT_TYPES = tuple(DEVELOPMENT_PROMPTS)
 DELIVERY_AGENT_TYPES = tuple(DELIVERY_PROMPTS)
-ALL_AGENT_TYPES = (*PLANNING_AGENT_TYPES, *DEVELOPMENT_AGENT_TYPES, *DELIVERY_AGENT_TYPES)
+SYSTEM_AGENT_TYPES = tuple(SYSTEM_PROMPTS)
+ALL_AGENT_TYPES = (*PLANNING_AGENT_TYPES, *DEVELOPMENT_AGENT_TYPES, *DELIVERY_AGENT_TYPES, *SYSTEM_AGENT_TYPES)
 CONTEXT_DEPENDENCIES = {
     "requirement": (),
     "schedule": ("requirement",),
@@ -69,6 +75,9 @@ CONTEXT_DEPENDENCIES = {
     "defect": ("quality", "unit_test", "integration_test", "code_review"),
     "document": ("requirement", "ui_design", "api_design", "database_design", "development"),
     "delivery_output": ("requirement", "wbs", "development", "quality", "defect", "document"),
+    "access_control": ("access_summary",),
+    "model_config": ("llm_config",),
+    "project_config": ("project_config", "lifecycle_summary"),
 }
 
 
@@ -77,6 +86,8 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
         if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (project_id, user_id)).fetchone():
             raise ProjectAccessError("Project access denied")
         project = db.execute("SELECT id, name, description, status, start_date, end_date FROM projects WHERE id = ?", (project_id,)).fetchone()
+        roles = {row["role"]: row["count"] for row in db.execute("SELECT role, COUNT(*) AS count FROM users GROUP BY role").fetchall()}
+        enabled_agents = db.execute("SELECT COUNT(*) FROM agent_definitions WHERE enabled = 1").fetchone()[0]
         rows = db.execute(
             f"SELECT id, agent_name, output_result, summary, status, provider, model, fallback, created_at FROM agent_runs WHERE project_id = ? AND agent_name IN ({','.join('?' for _ in ALL_AGENT_TYPES)}) ORDER BY id DESC",
             (project_id, *ALL_AGENT_TYPES),
@@ -96,16 +107,20 @@ def get_agent_context(project_id: int, user_id: int) -> dict:
         return {"completed_count": completed, "total_count": len(types), "progress": round(completed / len(types) * 100),
                 "latest_agent": newest["agent_type"] if newest else None, "last_run_at": newest["created_at"] if newest else None,
                 "has_failure": any(item["status"] != "success" for item in items)}
-    return {"project_id": project_id, "project": dict(project), "agents": latest,
+    settings = {"access_summary": {"roles": roles}, "llm_config": {"provider": "ollama", "model": OLLAMA_MODEL,
+                "timeout": LLM_REQUEST_TIMEOUT, "enabled": USE_REAL_LLM}, "enabled_agents": enabled_agents}
+    return {"project_id": project_id, "project": dict(project), "settings": settings, "agents": latest,
             "planning": progress(PLANNING_AGENT_TYPES), "development": progress(DEVELOPMENT_AGENT_TYPES),
-            "delivery": progress(DELIVERY_AGENT_TYPES), "lifecycle": progress(ALL_AGENT_TYPES)}
+            "delivery": progress(DELIVERY_AGENT_TYPES), "system": progress(SYSTEM_AGENT_TYPES), "lifecycle": progress(ALL_AGENT_TYPES)}
 
 
 def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
     project_context = get_agent_context(payload.project_id, user_id)
-    # ponytail: latest full outputs are enough for this 16-agent scope; use summaries/token limits if prompts approach the model context window.
-    dependencies = {name: project_context["project"] if name == "project_config" else project_context["agents"][name]["output_text"]
-                    for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name == "project_config" or name in project_context["agents"]}
+    # ponytail: latest full outputs are enough for this 19-agent scope; use summaries/token limits if prompts approach the model context window.
+    special_context = {"project_config": project_context["project"], "lifecycle_summary": project_context["lifecycle"],
+                       **project_context["settings"]}
+    dependencies = {name: special_context[name] if name in special_context else project_context["agents"][name]["output_text"]
+                    for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name in special_context or name in project_context["agents"]}
     with closing(database.connect()) as db:
         if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (payload.project_id, user_id)).fetchone():
             raise ProjectAccessError("Project access denied")

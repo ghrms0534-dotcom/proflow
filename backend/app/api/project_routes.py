@@ -70,6 +70,7 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
             "development_agent": agent_context["development"],
             "delivery_agent": agent_context["delivery"],
             "lifecycle": agent_context["lifecycle"],
+            "system_agent": agent_context["system"],
         }
 
 

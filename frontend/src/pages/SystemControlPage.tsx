@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Bell, BookOpen, Bot, Box, BriefcaseBusiness, CalendarDays, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardCheck, Code2, Database, FileCode2, FileText, HelpCircle, Home, LayoutDashboard, Menu, MessageSquare, PackageCheck, Search, Send, Settings, ShieldCheck, Sparkles, Star, TestTube2, UserCircle } from 'lucide-react';
 import { AccountStatusBadge, AiStatusBadge, Card, GitBranchIcon, IntegratedSettingStatusBadge, PageShell, RoleBadge, SectionHeader, StatusBadge } from './SectionUi';
 import { SectionWorkspace, systemWorkspaceItems } from './SectionWorkspace';
 import type { SectionAgentState, WorkspaceAction } from '../types/agentWorkspace';
+import { AgentService } from '../services/projectService';
+import type { AgentRun, AgentType, ProjectAgentContext } from '../services/projectService';
+import { useAppStore } from '../store';
 const accountRows = [
   { id: 'USR-001', name: '김영희', email: 'younghee.kim@proflow.local', role: 'Admin', status: '활성', project: 'ProFlow MVP', menus: '전체 메뉴', lastLogin: '2026-06-25 10:20', createdAt: '2026-01-05', permissions: '사용자/권한/배포 승인', activities: ['로그인', '프로젝트 구성 변경', '배포 요청 승인', '품질 검증 확인'] },
   { id: 'USR-002', name: '박민지', email: 'minji.park@proflow.local', role: 'PM', status: '활성', project: 'ProFlow MVP', menus: '대시보드, 일정, 산출물, 배포', lastLogin: '2026-06-25 09:44', createdAt: '2026-01-10', permissions: '프로젝트 관리/산출물 승인', activities: ['로그인', '문서 수정', '산출물 승인', '배포 요청'] },
@@ -492,9 +495,33 @@ function SystemSettingsPage({ title }: { title: string }) {
 
 
 
+function SystemAgentPanel({ agentType }: { agentType: AgentType }) {
+  const projectId = useAppStore((state) => state.currentProjectId);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState('');
+  const [runs, setRuns] = useState<AgentRun[]>([]);
+  const [context, setContext] = useState<ProjectAgentContext | null>(null);
+  const loadContext = async () => { if (projectId) setContext(await AgentService.getContext(projectId)); };
+  useEffect(() => { void loadContext().catch(() => setError('설정 요약을 불러오지 못했습니다.')); }, [projectId]);
+  const run = async () => {
+    if (!projectId || !input.trim()) { setError('점검 요청을 입력해주세요.'); return; }
+    setLoading(true); setError('');
+    try {
+      const response = await AgentService.run(projectId, agentType, input.trim(), { settings: context?.settings ?? {} });
+      setResult(response.result); setRuns(response.recent_runs); await loadContext();
+      window.dispatchEvent(new Event('proflow:agent-run'));
+    } catch { setError('AI 설정 점검에 실패했습니다.'); }
+    finally { setLoading(false); }
+  };
+  return <Card className="mx-3 mt-2 p-4"><div className="text-sm font-semibold">AI 정책 점검</div><div className="mt-2 grid gap-2 md:grid-cols-3"><div className="rounded bg-slate-50 p-2 text-xs">Project: {String(context?.project.name ?? '-')}</div><div className="rounded bg-slate-50 p-2 text-xs">활성 Agent: {String((context?.settings as { enabled_agents?: number } | undefined)?.enabled_agents ?? '-')}</div><div className="rounded bg-slate-50 p-2 text-xs">System 실행: {context?.system.completed_count ?? 0}/3</div></div><textarea value={input} onChange={(event) => setInput(event.target.value)} placeholder="변경 없이 점검·추천할 내용을 입력하세요." className="mt-3 min-h-20 w-full rounded border border-slate-200 p-3 text-sm" /><div className="mt-2 flex justify-end"><button disabled={loading} onClick={run} className="rounded bg-[#0b66e4] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{loading ? '점검 중...' : 'AI 실행'}</button></div>{error && <div className="mt-2 text-xs text-red-700">{error}</div>}{result && <div className="mt-3 whitespace-pre-wrap rounded bg-blue-50 p-3 text-sm">{result}</div>}{!!runs.length && <div className="mt-3 space-y-1"><b className="text-xs">최근 실행 결과</b>{runs.map((item) => <div key={item.id} className="line-clamp-2 rounded border p-2 text-xs">{item.result}</div>)}</div>}</Card>;
+}
+
+
 export function SystemControlPage({ title, sectionAgent, onWorkspaceAction }: { title: string; sectionAgent: SectionAgentState; onWorkspaceAction: (section: string, action: WorkspaceAction, count?: number) => void }) {
   if (title === '시스템 관리') return <SectionWorkspace title="시스템 관리" items={systemWorkspaceItems} sectionAgent={sectionAgent} onWorkspaceAction={onWorkspaceAction} />;
-  if (title === '계정 관리') return <AccountsPage title={title} />;
-  if (title === 'AI 설정') return <AiSettingsPage title={title} />;
-  return <SystemSettingsPage title={title} />;
+  if (title === '계정 관리') return <><SystemAgentPanel agentType="access_control" /><AccountsPage title={title} /></>;
+  if (title === 'AI 설정') return <><SystemAgentPanel agentType="model_config" /><AiSettingsPage title={title} /></>;
+  return <><SystemAgentPanel agentType="project_config" /><SystemSettingsPage title={title} /></>;
 }

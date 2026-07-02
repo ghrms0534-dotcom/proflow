@@ -6,6 +6,7 @@ AgentType = Literal[
     "requirement", "schedule", "wbs", "ui_design", "database_design", "api_design",
     "development", "configuration", "source_management", "code_review", "unit_test", "integration_test",
     "quality", "defect", "document", "delivery_output",
+    "access_control", "model_config", "project_config",
 ]
 
 
