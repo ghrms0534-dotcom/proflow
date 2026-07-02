@@ -52,6 +52,15 @@ class AiRecommendation(BaseModel):
     message: str
 
 
+class PlanningAgentProgress(BaseModel):
+    completed_count: int
+    total_count: int
+    progress: int
+    latest_agent: str | None
+    last_run_at: str | None
+    has_failure: bool
+
+
 class DashboardResponse(BaseModel):
     summary: DashboardSummary
     stages: list[StageProgress]
@@ -59,3 +68,4 @@ class DashboardResponse(BaseModel):
     ai_recommendations: list[AiRecommendation]
     recent_activities: list[RecentActivity]
     project_info: ProjectInfo
+    planning_agent: PlanningAgentProgress

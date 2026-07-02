@@ -33,6 +33,9 @@ class AgentRunServiceTest(unittest.TestCase):
             self.assertEqual(config._positive_int("TEST_LLM_TIMEOUT", 60), 60)
 
     def test_planning_agent_run_uses_prompts_and_saves_history(self):
+        with closing(database.connect()) as db:
+            runs_before = db.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id = 1 AND agent_name IN ('requirement','schedule','wbs','ui_design','database_design','api_design')").fetchone()[0]
+            lifecycle_before = db.execute("SELECT COUNT(*) FROM activity_logs WHERE project_id = 1 AND message LIKE '%lifecycle context%'").fetchone()[0]
         with TestClient(app) as client:
             login = client.post("/api/auth/login", json={"email": "demo@example.com", "password": "1234"})
             headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
@@ -52,9 +55,17 @@ class AgentRunServiceTest(unittest.TestCase):
             self.assertEqual(result["agent_type"], "api_design")
             self.assertEqual(result["result"], "AI result")
             self.assertLessEqual(len(result["recent_runs"]), 5)
+            context = client.get("/api/projects/1/agent-context", headers=headers)
+            self.assertEqual(context.status_code, 200, context.text)
+            self.assertEqual(context.json()["planning"]["completed_count"], 6)
+            self.assertEqual(context.json()["planning"]["progress"], 100)
+            self.assertEqual(context.json()["planning"]["latest_agent"], "api_design")
+            self.assertIn("database_design", generate.call_args.args[0])
+            dashboard = client.get("/api/projects/1/dashboard", headers=headers).json()
+            self.assertEqual(dashboard["planning_agent"]["progress"], 100)
             with closing(database.connect()) as db:
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id = 1 AND agent_name IN ('requirement','schedule','wbs','ui_design','database_design','api_design')").fetchone()[0], 6)
-                self.assertEqual(db.execute("SELECT COUNT(*) FROM activity_logs WHERE project_id = 1 AND message LIKE '%Agent AI%'").fetchone()[0], 6)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM agent_runs WHERE project_id = 1 AND agent_name IN ('requirement','schedule','wbs','ui_design','database_design','api_design')").fetchone()[0], runs_before + 6)
+                self.assertEqual(db.execute("SELECT COUNT(*) FROM activity_logs WHERE project_id = 1 AND message LIKE '%lifecycle context%'").fetchone()[0], lifecycle_before + 6)
 
     @patch("app.services.llm_service.USE_REAL_LLM", False)
     def test_development_agent_returns_mock_response(self):

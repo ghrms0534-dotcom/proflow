@@ -258,6 +258,7 @@ def init_db() -> None:
                 fallback INTEGER NOT NULL DEFAULT 0,
                 input_prompt TEXT NOT NULL DEFAULT '',
                 output_result TEXT NOT NULL DEFAULT '',
+                summary TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'success',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
@@ -267,6 +268,7 @@ def init_db() -> None:
         for name, definition in {
             "input_prompt": "TEXT NOT NULL DEFAULT ''",
             "output_result": "TEXT NOT NULL DEFAULT ''",
+            "summary": "TEXT NOT NULL DEFAULT ''",
             "status": "TEXT NOT NULL DEFAULT 'success'",
         }.items():
             if name not in columns:

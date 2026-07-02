@@ -33,24 +33,68 @@ PLANNING_PROMPTS = {
 }
 
 
+PLANNING_AGENT_TYPES = tuple(PLANNING_PROMPTS)
+CONTEXT_DEPENDENCIES = {
+    "requirement": (),
+    "schedule": ("requirement",),
+    "wbs": ("requirement", "schedule"),
+    "ui_design": ("requirement", "wbs"),
+    "database_design": ("requirement", "api_design", "ui_design"),
+    "api_design": ("requirement", "database_design"),
+}
+
+
+def get_agent_context(project_id: int, user_id: int) -> dict:
+    with closing(database.connect()) as db:
+        if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (project_id, user_id)).fetchone():
+            raise ProjectAccessError("Project access denied")
+        rows = db.execute(
+            f"SELECT id, agent_name, output_result, summary, status, provider, model, fallback, created_at FROM agent_runs WHERE project_id = ? AND agent_name IN ({','.join('?' for _ in PLANNING_AGENT_TYPES)}) ORDER BY id DESC",
+            (project_id, *PLANNING_AGENT_TYPES),
+        ).fetchall()
+    latest = {}
+    for row in rows:
+        if row["agent_name"] not in latest:
+            latest[row["agent_name"]] = {
+                "id": row["id"], "agent_type": row["agent_name"], "summary": row["summary"] or row["output_result"][:300],
+                "output_text": row["output_result"], "status": row["status"], "provider": row["provider"],
+                "model": row["model"], "fallback": bool(row["fallback"]), "created_at": row["created_at"],
+            }
+    completed = sum(item["status"] == "success" for item in latest.values())
+    newest = next(iter(latest.values()), None)
+    return {"project_id": project_id, "agents": latest, "planning": {
+        "completed_count": completed, "total_count": len(PLANNING_AGENT_TYPES),
+        "progress": round(completed / len(PLANNING_AGENT_TYPES) * 100),
+        "latest_agent": newest["agent_type"] if newest else None, "last_run_at": newest["created_at"] if newest else None,
+        "has_failure": any(item["status"] != "success" for item in latest.values()),
+    }}
+
+
 def run_agent(payload: AgentRunRequest, user_id: int) -> AgentRunResponse:
+    project_context = get_agent_context(payload.project_id, user_id)
+    # ponytail: latest full outputs are enough for six planning agents; use summaries/token limits if prompts approach the model context window.
+    dependencies = {name: project_context["agents"][name]["output_text"] for name in CONTEXT_DEPENDENCIES[payload.agent_type] if name in project_context["agents"]}
     with closing(database.connect()) as db:
         if not db.execute("SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?", (payload.project_id, user_id)).fetchone():
             raise ProjectAccessError("Project access denied")
 
     prompt = f"{PLANNING_PROMPTS[payload.agent_type]}\n\n사용자 요청:\n{payload.user_input}\n\n추가 컨텍스트:\n{payload.context}"
+    prompt += f"\n\nLifecycle context:\n{dependencies}"
     llm = generate(prompt)
     status = "fallback" if llm.fallback else "success"
+    summary = llm.text.strip().replace("\n", " ")[:300]
     with closing(database.connect()) as db:
         cursor = db.execute(
             """
             INSERT INTO agent_runs
-            (project_id, agent_name, request_json, response_json, provider, model, mock, fallback, input_prompt, output_result, status)
-            VALUES (?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?)
+            (project_id, agent_name, request_json, response_json, provider, model, mock, fallback, input_prompt, output_result, summary, status)
+            VALUES (?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (payload.project_id, payload.agent_type, payload.model_dump_json(), llm.provider, llm.model,
-             llm.provider == "mock", llm.fallback, prompt, llm.text, status),
+             llm.provider == "mock", llm.fallback, prompt, llm.text, summary, status),
         )
+        db.execute("INSERT INTO activity_logs (project_id, message, type) VALUES (?, ?, 'Agent')",
+                   (payload.project_id, f"{payload.agent_type} lifecycle context: {', '.join(dependencies) or 'standalone'}"))
         db.execute("INSERT INTO activity_logs (project_id, message, type) VALUES (?, ?, 'Agent')",
                    (payload.project_id, f"{payload.agent_type} Agent AI 실행"))
         db.commit()

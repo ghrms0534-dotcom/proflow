@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app import schemas
 from app.api.auth_routes import get_current_user
 from app.common import database
+from app.services.agent_run_service import get_agent_context
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 DONE = {"approved", "completed", "done", "closed", "passed"}
@@ -64,6 +65,7 @@ def dashboard(project_id: int, current_user=Depends(get_current_user)):
             "project_info": {"name": project["name"], "customer": project["description"] or "Internal",
                              "pm": current_user["name"], "period": f"{project['start_date']} ~ {project['end_date']}",
                              "base_date": date.today().isoformat()},
+            "planning_agent": get_agent_context(project_id, current_user["id"])["planning"],
         }
 
 
@@ -73,6 +75,11 @@ def activities(project_id: int, current_user=Depends(get_current_user)):
     with closing(database.connect()) as db:
         rows = db.execute("SELECT * FROM activity_logs WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT 20", (project_id,)).fetchall()
         return {"activities": [dict(row) for row in rows]}
+
+
+@router.get("/{project_id}/agent-context")
+def agent_context(project_id: int, current_user=Depends(get_current_user)):
+    return get_agent_context(project_id, current_user["id"])
 
 
 def require_member(project_id: int, user_id: int) -> None:

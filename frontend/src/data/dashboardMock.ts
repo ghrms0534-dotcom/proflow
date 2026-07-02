@@ -42,4 +42,5 @@ export const mockDashboard: DashboardData = {
   recentActivities: mockRecentActivities,
   aiRecommendations: mockAiRecommendations,
   projectInfo: { name: 'ProFlow Demo Project', customer: 'Internal', pm: 'Demo User', period: '2026-01-01 ~ 2026-12-31', baseDate: '2026-06-25' },
+  planningAgent: { completedCount: 0, totalCount: 6, progress: 0, latestAgent: null, lastRunAt: null, hasFailure: false },
 };

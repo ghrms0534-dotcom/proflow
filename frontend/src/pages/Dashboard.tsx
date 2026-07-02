@@ -100,9 +100,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     recent: [change.recent, ...snapshot.recent].slice(0, 3),
     activityCount: snapshot.activityCount + 1,
   }));
-  const planningProgress = Math.round(Object.values(planningSnapshot.rates).reduce((sum, rate) => sum + rate, 0) / Object.keys(planningSnapshot.rates).length);
-  const planningReady = planningSnapshot.rates.requirement >= 80 && planningSnapshot.rates.wbs >= 80 && planningSnapshot.rates.schedule >= 70 && planningSnapshot.totals.ui > 0 && planningSnapshot.totals.db > 0 && planningSnapshot.totals.api > 0 && planningSnapshot.totals.output >= 5;
-  const planningRisk: SectionAgentState['riskLevel'] = Object.values(planningSnapshot.rates).some((rate) => rate < 40) ? 'CRITICAL' : planningReady ? 'SAFE' : 'WARN';
+  const localPlanningProgress = Math.round(Object.values(planningSnapshot.rates).reduce((sum, rate) => sum + rate, 0) / Object.keys(planningSnapshot.rates).length);
+  const planningProgress = dashboardData?.planningAgent.progress ?? localPlanningProgress;
+  const planningReady = dashboardData ? dashboardData.planningAgent.completedCount === dashboardData.planningAgent.totalCount : planningSnapshot.rates.requirement >= 80 && planningSnapshot.rates.wbs >= 80 && planningSnapshot.rates.schedule >= 70 && planningSnapshot.totals.ui > 0 && planningSnapshot.totals.db > 0 && planningSnapshot.totals.api > 0 && planningSnapshot.totals.output >= 5;
+  const planningRisk: SectionAgentState['riskLevel'] = dashboardData?.planningAgent.hasFailure ? 'CRITICAL' : planningReady ? 'SAFE' : 'WARN';
   const qualityScore = Math.round((qualitySnapshot.codeQuality + (100 - qualitySnapshot.defectRisk) + (100 - qualitySnapshot.securityRisk) + qualitySnapshot.documentCompletion + qualitySnapshot.outputCompleteness) / 5);
   const qualityReady = qualityScore >= 80 && qualitySnapshot.criticalIssues === 0 && qualitySnapshot.documentCompletion >= 80 && qualitySnapshot.outputCompleteness >= 80;
   const qualityRisk: SectionAgentState['riskLevel'] = qualitySnapshot.criticalIssues > 0 ? 'CRITICAL' : qualityReady ? 'SAFE' : 'WARN';
@@ -136,6 +137,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       setDashboardLoadState(fallback ? 'fallback' : 'ready');
       setDashboardError(error ?? null);
     });
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const refresh = () => { void DashboardService.getDashboard(currentProjectId).then(({ data }) => setDashboardData(data)); };
+    window.addEventListener('proflow:agent-run', refresh);
+    return () => window.removeEventListener('proflow:agent-run', refresh);
   }, [currentProjectId]);
 
   return (

@@ -71,6 +71,7 @@ export interface DashboardData {
   recentActivities: RecentActivity[];
   aiRecommendations: AiRecommendation[];
   projectInfo: DashboardProjectInfo;
+  planningAgent: { completedCount: number; totalCount: number; progress: number; latestAgent: string | null; lastRunAt: string | null; hasFailure: boolean };
 }
 
 export type DashboardLoadState = 'loading' | 'ready' | 'fallback';
