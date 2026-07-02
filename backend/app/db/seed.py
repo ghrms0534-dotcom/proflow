@@ -111,7 +111,7 @@ def seed(db: sqlite3.Connection) -> None:
             db.execute(
                 """
                 INSERT INTO agent_runs (project_id, agent_name, request_json, response_json, provider, model, mock, fallback)
-                VALUES (1, 'Project Control Agent', '{"source":"seed"}', '{"summary":"Initial project context ready"}', 'mock', 'gemma4:31b', 1, 0)
+                VALUES (1, 'Project Control Agent', '{"source":"seed"}', '{"summary":"Initial project context ready"}', 'mock', 'qwen2.5:3b', 1, 0)
                 """
             )
 
